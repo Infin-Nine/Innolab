@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import { createClient } from "@supabase/supabase-js";
 import Image from "next/image";
 import ResearchTimeline from "./components/ResearchTimeline";
 import Link from "next/link";
 import CreatePost from "./components/CreatePost";
 import LabNotebook from "./components/LabNotebook";
+import { supabase } from "./lib/supabaseClient";
+import type { Post, WipStatus } from "./types/models";
 import {
   Atom,
   ImageUp,
@@ -21,18 +22,6 @@ import {
   Zap,
   X,
 } from "lucide-react";
-type WipStatus = "idea" | "prototype" | "built" | "wip" | "failed";
-
-type Post = {
-  id: string;
-  user_id: string;
-  title: string | null;
-  problem_statement: string | null;
-  wip_status: WipStatus | null;
-  media_url: string | null;
-  created_at: string | null;
-  profiles?: Profile | null;
-};
 
 type Profile = {
   id: string;
@@ -47,9 +36,8 @@ type Profile = {
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-const badgeStyles: Record<WipStatus, string> = {
+const badgeStyles = {
   idea: "bg-fuchsia-500/20 text-fuchsia-200 border-fuchsia-500/40",
   exploring: "bg-sky-500/20 text-sky-200 border-sky-500/40",
   prototype: "bg-cyan-500/20 text-cyan-200 border-cyan-500/40",
@@ -58,9 +46,9 @@ const badgeStyles: Record<WipStatus, string> = {
   failed: "bg-rose-500/20 text-rose-200 border-rose-500/40",
   built: "bg-emerald-500/20 text-emerald-200 border-emerald-500/40",
   wip: "bg-sky-500/20 text-sky-200 border-sky-500/40",
-};
+} as const satisfies Record<WipStatus, string>;
 
-const badgeLabels: Record<WipStatus, string> = {
+const badgeLabels = {
   idea: "Idea",
   exploring: "Exploring",
   prototype: "Prototype",
@@ -69,7 +57,7 @@ const badgeLabels: Record<WipStatus, string> = {
   failed: "Failed",
   built: "Completed",
   wip: "Exploring",
-};
+} as const satisfies Record<WipStatus, string>;
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<"feed" | "profile">("feed");

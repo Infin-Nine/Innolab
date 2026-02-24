@@ -6,18 +6,9 @@ import Link from "next/link";
 import Image from "next/image";
 import { createClient } from "@supabase/supabase-js";
 import CollabButton from "../../components/CollabButton";
-import ResearchTimeline from "../../components/ResearchTimeline";
 import { ArrowLeft, FlaskConical, Loader2, Trash2 } from "lucide-react";
 
-type WipStatus =
-  | "idea"
-  | "prototype"
-  | "built"
-  | "wip"
-  | "failed"
-  | "exploring"
-  | "testing"
-  | "completed";
+type WipStatus = "Idea" | "Prototyping" | "Testing" | "Failed" | "Succeeded";
 
 type Profile = {
   id: string;
@@ -34,16 +25,13 @@ type Post = {
   user_id: string;
   title: string | null;
   problem_statement: string | null;
-  theory?: string | null;
-  explanation?: string | null;
-  approach?: string | null;
-  observations?: string | null;
-  reflection?: string | null;
-  feedback_needed?: string[] | string | null;
-  external_link?: string | null;
-  media_url?: string | null;
   wip_status: string;
   created_at: string | null;
+};
+type PostDetails = {
+  theory?: string | null;
+  explanation?: string | null;
+  media_url?: string | null;
 };
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
@@ -51,25 +39,11 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 const badgeStyles: Record<WipStatus, string> = {
-  idea: "bg-fuchsia-500/20 text-fuchsia-200 border-fuchsia-500/40",
-  exploring: "bg-sky-500/20 text-sky-200 border-sky-500/40",
-  prototype: "bg-cyan-500/20 text-cyan-200 border-cyan-500/40",
-  testing: "bg-amber-500/20 text-amber-200 border-amber-500/40",
-  completed: "bg-emerald-500/20 text-emerald-200 border-emerald-500/40",
-  failed: "bg-rose-500/20 text-rose-200 border-rose-500/40",
-  built: "bg-emerald-500/20 text-emerald-200 border-emerald-500/40",
-  wip: "bg-sky-500/20 text-sky-200 border-sky-500/40",
-};
-
-const badgeLabels: Record<WipStatus, string> = {
-  idea: "Idea",
-  exploring: "Exploring",
-  prototype: "Prototype",
-  testing: "Testing",
-  completed: "Completed",
-  failed: "Failed",
-  built: "Completed",
-  wip: "Exploring",
+  Idea: "bg-fuchsia-500/20 text-fuchsia-200 border-fuchsia-500/40",
+  Prototyping: "bg-cyan-500/20 text-cyan-200 border-cyan-500/40",
+  Testing: "bg-emerald-500/20 text-emerald-200 border-emerald-500/40",
+  Failed: "bg-rose-500/20 text-rose-200 border-rose-500/40",
+  Succeeded: "bg-amber-500/20 text-amber-200 border-amber-500/40",
 };
 
 const formatSkills = (profile: Profile | null) => {
@@ -111,21 +85,6 @@ const getInitials = (name: string) => {
   const initials = parts.slice(0, 2).map((part) => part[0]?.toUpperCase());
   return initials.join("") || "IN";
 };
-const normalizeFeedback = (value?: string[] | string | null) => {
-  if (!value) return [];
-  if (Array.isArray(value)) {
-    return value.map((item) => String(item)).filter(Boolean);
-  }
-  try {
-    const parsed = JSON.parse(value);
-    if (Array.isArray(parsed)) {
-      return parsed.map((item) => String(item)).filter(Boolean);
-    }
-  } catch {
-    return [value];
-  }
-  return [value];
-};
 
 export default function ProfilePage() {
   const params = useParams();
@@ -134,6 +93,10 @@ export default function ProfilePage() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [expandedPosts, setExpandedPosts] = useState<Record<string, boolean>>(
+    {}
+  );
+  const [details, setDetails] = useState<Record<string, PostDetails>>({});
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -161,9 +124,7 @@ export default function ProfilePage() {
         .maybeSingle();
       const { data: postData } = await supabase
         .from("posts")
-        .select(
-          "id, user_id, title, problem_statement, theory, explanation, approach, observations, reflection, feedback_needed, external_link, media_url, wip_status, created_at"
-        )
+        .select("id, user_id, title, problem_statement, wip_status, created_at")
         .eq("user_id", profileId)
         .order("created_at", { ascending: false });
       setProfile((profileData as Profile) ?? null);
@@ -220,12 +181,33 @@ export default function ProfilePage() {
     }
   };
 
-  const openRecord = (postId: string) => {
-    setActivePostId(postId);
-  };
-
-  const closeRecord = () => {
-    setActivePostId(null);
+  const toggleExpand = async (postId: string) => {
+    const isOpen = !!expandedPosts[postId];
+    if (isOpen) {
+      setExpandedPosts((prev) => ({ ...prev, [postId]: false }));
+      return;
+    }
+    if (!details[postId]) {
+      const { data } = await supabase
+        .from("posts")
+        .select("theory, explanation, media_url")
+        .eq("id", postId)
+        .maybeSingle();
+      const row = data as PostDetails | null;
+      if (row) {
+        setDetails((prev) => ({
+          ...prev,
+          [postId]: {
+            theory: row.theory ?? null,
+            explanation: row.explanation ?? null,
+            media_url: row.media_url ?? null,
+          },
+        }));
+      } else {
+        setDetails((prev) => ({ ...prev, [postId]: {} }));
+      }
+    }
+    setExpandedPosts((prev) => ({ ...prev, [postId]: true }));
   };
 
   const handleSignOut = async () => {
@@ -344,20 +326,123 @@ export default function ProfilePage() {
 
             <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
               <h2 className="text-lg font-semibold">Research Timeline</h2>
-              <div className="mt-4">
-                <ResearchTimeline
-                  userId={profileId}
-                  currentUserId={currentUserId}
-                  initialPosts={posts}
-                  showAuthor={true}
-                  authorName={getDisplayName(profile)}
-                />
+              <div className="mt-4 space-y-3">
+                {posts.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-800 bg-slate-950/70 p-8 text-center">
+                    <p className="text-base font-semibold text-slate-100">
+                      {currentUserId === profileId
+                        ? "No experiments published yet."
+                        : "This researcher hasn’t shared any experiments yet."}
+                    </p>
+                    <p className="mt-2 max-w-xl text-sm text-slate-400">
+                      {currentUserId === profileId
+                        ? "Start documenting your ideas and build your public research profile."
+                        : "Check back later for updates."}
+                    </p>
+                    {currentUserId === profileId && (
+                      <Link
+                        href="/"
+                        className="mt-4 inline-flex items-center justify-center rounded-full border border-cyan-500/50 bg-cyan-500/20 px-5 py-2 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-500/30 hover:border-cyan-400/60"
+                      >
+                        Create First Experiment
+                      </Link>
+                    )}
+                  </div>
+                ) : (
+                  posts.map((post) => {
+                    const dateText = post.created_at
+                      ? new Date(post.created_at).toLocaleDateString()
+                      : "Recently";
+                    const desc =
+                      (post.problem_statement ?? "").slice(0, 140) +
+                      ((post.problem_statement ?? "").length > 140 ? "…" : "");
+                    return (
+                      <div
+                        key={post.id}
+                        className="grid grid-cols-[120px_1fr] items-start gap-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-4"
+                      >
+                        <div className="text-xs text-slate-400">{dateText}</div>
+                        <div className="text-sm text-slate-200">
+                          <p className="font-semibold text-slate-100">
+                            {post.title ?? "Untitled Experiment"}
+                          </p>
+                          {post.problem_statement && (
+                            <p className="mt-1 text-slate-300">{desc}</p>
+                          )}
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <span
+                              className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide ${
+                                badgeStyles[post.wip_status as WipStatus] ??
+                                badgeStyles.Idea
+                              }`}
+                            >
+                              {post.wip_status}
+                            </span>
+                            {currentUserId === post.user_id && (
+                              <button
+                                type="button"
+                                onClick={() => handleDeletePost(post.id)}
+                                className="flex items-center gap-1 rounded-full border border-rose-500/40 bg-rose-500/10 px-3 py-1 text-xs font-semibold text-rose-100 transition hover:bg-rose-500/20"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                                Delete
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => toggleExpand(post.id)}
+                              className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 text-xs font-semibold text-cyan-100 hover:bg-cyan-500/20"
+                            >
+                              {expandedPosts[post.id] ? "Show less" : "Read more"}
+                            </button>
+                          </div>
+                          {expandedPosts[post.id] && (
+                            <div className="mt-3 space-y-2">
+                              {details[post.id]?.theory && (
+                                <div>
+                                  <p className="text-xs uppercase tracking-[0.3em] text-fuchsia-400">
+                                    Theory
+                                  </p>
+                                  <p className="text-sm text-slate-200">
+                                    {details[post.id]?.theory}
+                                  </p>
+                                </div>
+                              )}
+                              {details[post.id]?.explanation && (
+                                <div>
+                                  <p className="text-xs uppercase tracking-[0.3em] text-emerald-400">
+                                    Explanation
+                                  </p>
+                                  <p className="text-sm text-slate-200">
+                                    {details[post.id]?.explanation}
+                                  </p>
+                                </div>
+                              )}
+                              {details[post.id]?.media_url && (
+                                <div className="overflow-hidden rounded-2xl border border-slate-800">
+                                  <div className="relative aspect-[16/9] max-h-96 w-full">
+                                    <Image
+                                      src={details[post.id]?.media_url as string}
+                                      alt="Lab upload"
+                                      className="object-cover"
+                                      fill
+                                      sizes="(max-width: 768px) 100vw, 768px"
+                                    />
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </div>
           </div>
         )}
       </div>
-      {/* Timeline modal is handled inside ResearchTimeline */}
     </div>
   );
 }

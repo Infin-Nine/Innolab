@@ -1,62 +1,21 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { createClient } from "@supabase/supabase-js";
 import Image from "next/image";
 import Link from "next/link";
 import { FlaskConical } from "lucide-react";
 import { useEdit } from "../contexts/EditExperimentContext";
 import PostComments from "./PostComments";
 import { useFeedbackSheet } from "../contexts/FeedbackSheetContext";
-
-type WipStatus =
-  | "idea"
-  | "prototype"
-  | "built"
-  | "wip"
-  | "failed"
-  | "exploring"
-  | "testing"
-  | "completed";
-
-type Profile = {
-  username?: string | null;
-  full_name?: string | null;
-  avatar_url?: string | null;
-  id?: string;
-  email?: string | null;
-};
-
-type Post = {
-  id: string;
-  user_id: string;
-  title: string | null;
-  problem_statement: string | null;
-  theory?: string | null;
-  explanation?: string | null;
-  approach?: string | null;
-  observations?: string | null;
-  reflection?: string | null;
-  feedback_needed?: string[] | string | null;
-  external_link?: string | null;
-  wip_status: WipStatus | null;
-  media_url: string | null;
-  created_at: string | null;
-  profiles?: Profile | Profile[] | null;
-  validations?: { count: number }[];
-  solutions?: { count: number }[];
-};
+import { supabase } from "../lib/supabaseClient";
+import type { Post, Profile, WipStatus } from "../types/models";
 
 type Props = {
   refreshKey?: number;
   onPostsLoaded?: (posts: Post[]) => void;
 };
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
-const badgeStyles: Record<WipStatus, string> = {
+const badgeStyles = {
   idea: "bg-fuchsia-500/20 text-fuchsia-200 border-fuchsia-500/40",
   exploring: "bg-sky-500/20 text-sky-200 border-sky-500/40",
   prototype: "bg-cyan-500/20 text-cyan-200 border-cyan-500/40",
@@ -65,9 +24,9 @@ const badgeStyles: Record<WipStatus, string> = {
   failed: "bg-rose-500/20 text-rose-200 border-rose-500/40",
   built: "bg-emerald-500/20 text-emerald-200 border-emerald-500/40",
   wip: "bg-sky-500/20 text-sky-200 border-sky-500/40",
-};
+} as const satisfies Record<WipStatus, string>;
 
-const badgeLabels: Record<WipStatus, string> = {
+const badgeLabels = {
   idea: "Idea",
   exploring: "Exploring",
   prototype: "Prototype",
@@ -76,7 +35,7 @@ const badgeLabels: Record<WipStatus, string> = {
   failed: "Failed",
   built: "Completed",
   wip: "Exploring",
-};
+} as const satisfies Record<WipStatus, string>;
 
 export default function LabNotebook({ refreshKey = 0, onPostsLoaded }: Props) {
   const [posts, setPosts] = useState<Post[]>([]);
@@ -157,7 +116,9 @@ export default function LabNotebook({ refreshKey = 0, onPostsLoaded }: Props) {
           .in("id", Array.from(new Set(ids)));
         const map: Record<string, Profile> = {};
         ((profs as Profile[]) ?? []).forEach((p) => {
-          map[p.id] = p as Profile;
+           if (p.id) {
+          map[p.id] = p;
+          }
         });
         setAuthors((prev) => ({ ...prev, ...map }));
       }
@@ -231,6 +192,7 @@ export default function LabNotebook({ refreshKey = 0, onPostsLoaded }: Props) {
         .or(`requester_id.eq.${userId},receiver_id.eq.${userId}`)
         .eq("status", "accepted");
       if (!mounted) return;
+      if (error) return;
       const setIds = new Set<string>();
       (data as { requester_id: string; receiver_id: string }[] | null)?.forEach((row) => {
         const other = row.requester_id === userId ? row.receiver_id : row.requester_id;

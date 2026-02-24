@@ -1,36 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useState, useCallback, type FormEvent } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { Loader2, Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useFeedbackSheet } from "../contexts/FeedbackSheetContext";
-
-type Solution = {
-  id: string;
-  post_id: string;
-  user_id: string;
-  content: string;
-  created_at: string | null;
-};
-
-type Profile = {
-  id: string;
-  username?: string | null;
-};
+import type { Profile, Solution } from "../types/models";
 
 type Props = {
   postId: string;
   postOwnerId?: string;
 };
-
-const FEEDBACK_TYPES = [
-  "Suggest Improvement",
-  "Identify Flaw",
-  "Provide Resource",
-  "Validate Approach",
-  "Offer Collaboration",
-] as const;
 
 const parseType = (content: string) => {
   const m = content.match(/^\s*\[([^\]]+)\]\s*(.*)$/s);
@@ -40,22 +20,12 @@ const parseType = (content: string) => {
   return { type: "Insight", text: content };
 };
 
-const composeContent = (type: string, text: string) => {
-  return `[${type}] ${text}`;
-};
-
 export default function PostComments({ postId, postOwnerId }: Props) {
   const [items, setItems] = useState<Solution[]>([]);
   const [authors, setAuthors] = useState<Record<string, Profile>>({});
   const [loading, setLoading] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
-  const [selectedType, setSelectedType] = useState<(typeof FEEDBACK_TYPES)[number]>(
-    "Suggest Improvement"
-  );
-  const [draft, setDraft] = useState("");
-  const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [editingId, setEditingId] = useState<string | null>(null);
   const { open } = useFeedbackSheet();
 
   const getUsername = (p?: Profile) => p?.username ?? "";
@@ -83,7 +53,10 @@ export default function PostComments({ postId, postOwnerId }: Props) {
           .select("id, username")
           .in("id", ids);
         const map: Record<string, Profile> = {};
-        (profs as Profile[] | null)?.forEach((p) => (map[p.id] = p));
+        (profs as Profile[] | null)?.forEach((p) => {
+          if (!p?.id) return;
+          map[p.id] = p;
+        });
         setAuthors(map);
       } else {
         setAuthors({});
@@ -128,14 +101,7 @@ export default function PostComments({ postId, postOwnerId }: Props) {
 
   const startCreate = () => open(postId);
 
-  const startEdit = (s: Solution) => {
-    const { type, text } = parseType(s.content);
-    setEditingId(s.id);
-    setSelectedType(
-      FEEDBACK_TYPES.find((t) => t.toLowerCase() === type.toLowerCase()) ??
-        "Suggest Improvement"
-    );
-    setDraft(text);
+  const startEdit = () => {
     setMessage("Editing is currently inline here. Submit to replace your previous insight.");
   };
 
@@ -156,59 +122,6 @@ export default function PostComments({ postId, postOwnerId }: Props) {
     }
   };
 
-  const onSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    setMessage(null);
-    if (!userId) {
-      setMessage("Login to provide insight.");
-      return;
-    }
-    const text = draft.trim();
-    if (!text) return;
-    setSubmitting(true);
-    const content = composeContent(selectedType, text);
-    if (editingId) {
-      const prev = items;
-      setItems((p) => p.filter((x) => x.id !== editingId));
-      const del = await supabase.from("solutions").delete().eq("id", editingId);
-      if (del.error) {
-        setItems(prev);
-        setSubmitting(false);
-        setMessage(del.error.message);
-        return;
-      }
-    }
-    const { data, error } = await supabase
-      .from("solutions")
-      .insert({ post_id: postId, user_id: userId, content })
-      .select()
-      .single();
-    if (error) {
-      setSubmitting(false);
-      setMessage(error.message);
-      return;
-    }
-    const row = data as Solution;
-    setItems((prev) => [row, ...prev]);
-    if (!authors[userId]) {
-      const { data: prof } = await supabase
-        .from("profiles")
-        .select("id, username, email, full_name")
-        .eq("id", userId)
-        .maybeSingle();
-      if (prof) {
-        setAuthors((prev) => ({ ...prev, [userId]: prof as Profile }));
-      }
-    }
-    setOpenForm(false);
-    setDraft("");
-    setSelectedType("Suggest Improvement");
-    setEditingId(null);
-    setSubmitting(false);
-  };
-
-  const typeChips = useMemo(() => FEEDBACK_TYPES, []);
-
   return (
     <div className="mt-8">
       <div className="flex items-center justify-between">
@@ -221,59 +134,6 @@ export default function PostComments({ postId, postOwnerId }: Props) {
         <div className="mt-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
           {message}
         </div>
-      )}
-
-      {false && (
-        <form onSubmit={onSubmit} className="mt-4 space-y-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-          <div className="space-y-1">
-            <label className="text-xs text-slate-400">Feedback Type</label>
-            <div className="flex flex-wrap gap-2">
-              {typeChips.map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => setSelectedType(t)}
-                  className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
-                    selectedType === t
-                      ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-100"
-                      : "border-slate-700 text-slate-300 hover:border-emerald-400/60 hover:text-emerald-100"
-                  }`}
-                >
-                  {t}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs text-slate-400">Details</label>
-            <textarea
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              className="min-h-[120px] w-full rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
-            />
-          </div>
-          <div className="flex items-center justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setOpenForm(false);
-                setEditingId(null);
-                setDraft("");
-              }}
-              className="rounded-full border border-slate-700 px-3 py-1 text-xs font-semibold text-slate-200 transition hover:border-slate-400 hover:text-slate-100"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-500/20 px-3 py-1 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/30 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              {editingId ? "Save" : "Submit"}
-            </button>
-          </div>
-        </form>
       )}
 
       <div className="mt-6">
@@ -330,7 +190,7 @@ export default function PostComments({ postId, postOwnerId }: Props) {
                       {isMine && (
                         <button
                           type="button"
-                          onClick={() => startEdit(s)}
+                          onClick={startEdit}
                           className="flex items-center gap-1 rounded-full border border-slate-700 px-2 py-1 text-[10px] font-semibold text-slate-200 transition hover:border-emerald-400/60 hover:text-emerald-100"
                         >
                           <Pencil className="h-3 w-3" />
