@@ -7,7 +7,7 @@ import Link from "next/link";
 import CreatePost from "./components/CreatePost";
 import LabNotebook from "./components/LabNotebook";
 import { supabase } from "./lib/supabaseClient";
-import type { Post, WipStatus } from "./types/models";
+import type { Post } from "./types/models";
 import {
   Atom,
   ImageUp,
@@ -16,7 +16,6 @@ import {
   LogIn,
   PencilLine,
   ShieldOff,
-  Trash2,
   UserRound,
   Users,
   Zap,
@@ -37,28 +36,6 @@ type Profile = {
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
-
-const badgeStyles = {
-  idea: "bg-fuchsia-500/20 text-fuchsia-200 border-fuchsia-500/40",
-  exploring: "bg-sky-500/20 text-sky-200 border-sky-500/40",
-  prototype: "bg-cyan-500/20 text-cyan-200 border-cyan-500/40",
-  testing: "bg-amber-500/20 text-amber-200 border-amber-500/40",
-  completed: "bg-emerald-500/20 text-emerald-200 border-emerald-500/40",
-  failed: "bg-rose-500/20 text-rose-200 border-rose-500/40",
-  built: "bg-emerald-500/20 text-emerald-200 border-emerald-500/40",
-  wip: "bg-sky-500/20 text-sky-200 border-sky-500/40",
-} as const satisfies Record<WipStatus, string>;
-
-const badgeLabels = {
-  idea: "Idea",
-  exploring: "Exploring",
-  prototype: "Prototype",
-  testing: "Testing",
-  completed: "Completed",
-  failed: "Failed",
-  built: "Completed",
-  wip: "Exploring",
-} as const satisfies Record<WipStatus, string>;
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<"feed" | "profile">("feed");
@@ -81,13 +58,12 @@ export default function Home() {
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
 
   const [profileData, setProfileData] = useState<Profile | null>(null);
-  const [profileLoading, setProfileLoading] = useState(false);
+  const [, setProfileLoading] = useState(false);
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
   const [profileUsername, setProfileUsername] = useState("");
   const [profileBio, setProfileBio] = useState("");
   const [profileSkills, setProfileSkills] = useState("");
   const [profileResearchInterest, setProfileResearchInterest] = useState("");
-  const [expandedPosts, setExpandedPosts] = useState<Record<string, boolean>>({});
 
   const envMissing = !supabaseUrl || !supabaseAnonKey;
 
@@ -126,10 +102,6 @@ export default function Home() {
     setPostsRefreshKey((prev) => prev + 1);
     setIsPostModalOpen(false);
   };
-  const toggleExpand = (postId: string) => {
-    setExpandedPosts((prev) => ({ ...prev, [postId]: !prev[postId] }));
-  };
-
   useEffect(() => {
     if (!userId) {
       return;
@@ -204,44 +176,6 @@ export default function Home() {
   };
 
   // removed sign-out from dashboard; logout available on profile page only
-
-  const getMediaPath = (url: string | null) => {
-    if (!url) return null;
-    const marker = "/post-media/";
-    const index = url.indexOf(marker);
-    if (index === -1) return null;
-    return url.slice(index + marker.length);
-  };
-
-  const handleDeletePost = async (postId: string) => {
-    if (!userId) {
-      return;
-    }
-    const confirmed = window.confirm(
-      "Are you sure you want to permanently delete this post? This action cannot be undone."
-    );
-    if (!confirmed) {
-      return;
-    }
-    const target = posts.find((post) => post.id === postId);
-    if (!target || target.user_id !== userId) {
-      return;
-    }
-    const mediaPath = getMediaPath(target.media_url ?? null);
-    if (mediaPath) {
-      await supabase.storage.from("post-media").remove([mediaPath]);
-    }
-    setPosts((prev) => prev.filter((post) => post.id !== postId));
-    const { error } = await supabase
-      .from("posts")
-      .delete()
-      .eq("id", postId)
-      .eq("user_id", userId);
-    if (error) {
-      window.alert(error.message);
-      setPostsRefreshKey((prev) => prev + 1);
-    }
-  };
 
   const handleEditProfileSave = async () => {
     if (!userId) {

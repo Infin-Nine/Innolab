@@ -103,7 +103,11 @@ export default function LabNotebook({ refreshKey = 0, onPostsLoaded }: Props) {
         cc[r.id] = { v, s };
       });
       setCounts((prev) => (page === 0 ? cc : { ...prev, ...cc }));
-      setPosts((prev) => (page === 0 ? rows : [...prev, ...rows]));
+      let nextPosts: Post[] = [];
+      setPosts((prev) => {
+        nextPosts = page === 0 ? rows : [...prev, ...rows];
+        return nextPosts;
+      });
       if (page === 0 && rows.length > 0) {
         setLatestCreatedAt(rows[0].created_at ?? null);
       }
@@ -122,7 +126,7 @@ export default function LabNotebook({ refreshKey = 0, onPostsLoaded }: Props) {
         });
         setAuthors((prev) => ({ ...prev, ...map }));
       }
-      onPostsLoaded?.(page === 0 ? rows : [...(posts ?? []), ...rows]);
+      onPostsLoaded?.(nextPosts);
       setLoading(false);
     };
     fetchPosts();

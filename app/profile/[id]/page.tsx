@@ -184,6 +184,26 @@ export default function ProfilePage() {
     await supabase.auth.signOut();
   };
 
+  const handleDeletePost = async (postId: string) => {
+    if (!currentUserId) return;
+
+    const { error } = await supabase
+      .from("posts")
+      .delete()
+      .eq("id", postId)
+      .eq("user_id", currentUserId);
+
+    if (error) {
+      console.error("Failed to delete post:", error.message);
+      return;
+    }
+
+    setPosts((prev) => prev.filter((post) => post.id !== postId));
+    if (activePostId === postId) {
+      setActivePostId(null);
+    }
+  };
+
   const activePost = useMemo(
     () => posts.find((post) => post.id === activePostId) ?? null,
     [posts, activePostId]
