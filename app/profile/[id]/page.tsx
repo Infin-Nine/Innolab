@@ -6,6 +6,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { createClient } from "@supabase/supabase-js";
 import CollabButton from "../../components/CollabButton";
+import PostComments from "../../components/PostComments";
 import { ArrowLeft, FlaskConical, Loader2, Trash2 } from "lucide-react";
 
 type WipStatus = "Idea" | "Prototyping" | "Testing" | "Failed" | "Succeeded";
@@ -25,15 +26,17 @@ type Post = {
   user_id: string;
   title: string | null;
   problem_statement: string | null;
+  theory?: string | null;
+  explanation?: string | null;
+  approach?: string | null;
+  observations?: string | null;
+  reflection?: string | null;
+  feedback_needed?: string[] | string | null;
+  external_link?: string | null;
+  media_url?: string | null;
   wip_status: string;
   created_at: string | null;
 };
-type PostDetails = {
-  theory?: string | null;
-  explanation?: string | null;
-  media_url?: string | null;
-};
-
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
@@ -45,7 +48,6 @@ const badgeStyles: Record<WipStatus, string> = {
   Failed: "bg-rose-500/20 text-rose-200 border-rose-500/40",
   Succeeded: "bg-amber-500/20 text-amber-200 border-amber-500/40",
 };
-
 const formatSkills = (profile: Profile | null) => {
   if (!profile) {
     return [];
@@ -86,6 +88,18 @@ const getInitials = (name: string) => {
   return initials.join("") || "IN";
 };
 
+const normalizeFeedback = (value?: string[] | string | null) => {
+  if (!value) return [] as string[];
+  if (Array.isArray(value)) return value.map(String).filter(Boolean);
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) return parsed.map(String).filter(Boolean);
+  } catch {
+    return [String(value)];
+  }
+  return [String(value)];
+};
+
 export default function ProfilePage() {
   const params = useParams();
   const profileId = params?.id as string;
@@ -93,10 +107,8 @@ export default function ProfilePage() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [expandedPosts, setExpandedPosts] = useState<Record<string, boolean>>(
-    {}
-  );
-  const [details, setDetails] = useState<Record<string, PostDetails>>({});
+  const [activePostId, setActivePostId] = useState<string | null>(null);
+  const [modalLoading, setModalLoading] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -109,6 +121,24 @@ export default function ProfilePage() {
       data.subscription.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    if (!activePostId) {
+      return;
+    }
+    const previousOverflow = document.body.style.overflow;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setActivePostId(null);
+      }
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [activePostId]);
 
 
   useEffect(() => {
@@ -124,7 +154,9 @@ export default function ProfilePage() {
         .maybeSingle();
       const { data: postData } = await supabase
         .from("posts")
-        .select("id, user_id, title, problem_statement, wip_status, created_at")
+        .select(
+          "id, user_id, title, problem_statement, theory, explanation, approach, observations, reflection, feedback_needed, external_link, media_url, wip_status, created_at"
+        )
         .eq("user_id", profileId)
         .order("created_at", { ascending: false });
       setProfile((profileData as Profile) ?? null);
@@ -136,83 +168,26 @@ export default function ProfilePage() {
 
   const skills = useMemo(() => formatSkills(profile), [profile]);
 
-  const getMediaPath = (url: string | null) => {
-    if (!url) return null;
-    const marker = "/post-media/";
-    const index = url.indexOf(marker);
-    if (index === -1) return null;
-    return url.slice(index + marker.length);
+  const openPostModal = async (postId: string) => {
+    setActivePostId(postId);
+    setModalLoading(true);
+    // Reuse the existing Research Record document view behavior
+    // by letting the shared comments/insights component handle feedback state.
+    setModalLoading(false);
   };
 
-  const handleDeletePost = async (postId: string) => {
-    if (!currentUserId) {
-      return;
-    }
-    const confirmed = window.confirm(
-      "Are you sure you want to permanently delete this post? This action cannot be undone."
-    );
-    if (!confirmed) {
-      return;
-    }
-    const { data: mediaRow } = await supabase
-      .from("posts")
-      .select("media_url, user_id")
-      .eq("id", postId)
-      .eq("user_id", currentUserId)
-      .maybeSingle();
-    const mediaPath = getMediaPath((mediaRow as { media_url?: string | null } | null)?.media_url ?? null);
-    if (mediaPath) {
-      await supabase.storage.from("post-media").remove([mediaPath]);
-    }
-    setPosts((prev) => prev.filter((post) => post.id !== postId));
-    const { error } = await supabase
-      .from("posts")
-      .delete()
-      .eq("id", postId)
-      .eq("user_id", currentUserId);
-    if (error) {
-      window.alert(error.message);
-      const { data: postData } = await supabase
-        .from("posts")
-        .select("id, user_id, title, problem_statement, wip_status, created_at")
-        .eq("user_id", profileId)
-        .order("created_at", { ascending: false });
-      setPosts((postData as Post[]) ?? []);
-    }
-  };
-
-  const toggleExpand = async (postId: string) => {
-    const isOpen = !!expandedPosts[postId];
-    if (isOpen) {
-      setExpandedPosts((prev) => ({ ...prev, [postId]: false }));
-      return;
-    }
-    if (!details[postId]) {
-      const { data } = await supabase
-        .from("posts")
-        .select("theory, explanation, media_url")
-        .eq("id", postId)
-        .maybeSingle();
-      const row = data as PostDetails | null;
-      if (row) {
-        setDetails((prev) => ({
-          ...prev,
-          [postId]: {
-            theory: row.theory ?? null,
-            explanation: row.explanation ?? null,
-            media_url: row.media_url ?? null,
-          },
-        }));
-      } else {
-        setDetails((prev) => ({ ...prev, [postId]: {} }));
-      }
-    }
-    setExpandedPosts((prev) => ({ ...prev, [postId]: true }));
+  const closePostModal = () => {
+    setActivePostId(null);
   };
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
   };
+
+  const activePost = useMemo(
+    () => posts.find((post) => post.id === activePostId) ?? null,
+    [posts, activePostId]
+  );
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#0f172a,_#020617_55%)] text-slate-100">
@@ -359,6 +334,17 @@ export default function ProfilePage() {
                     return (
                       <div
                         key={post.id}
+                        onClick={() => {
+                          void openPostModal(post.id);
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            void openPostModal(post.id);
+                          }
+                        }}
+                        role="button"
+                        tabIndex={0}
                         className="grid grid-cols-[120px_1fr] items-start gap-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-4"
                       >
                         <div className="text-xs text-slate-400">{dateText}</div>
@@ -381,58 +367,17 @@ export default function ProfilePage() {
                             {currentUserId === post.user_id && (
                               <button
                                 type="button"
-                                onClick={() => handleDeletePost(post.id)}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  void handleDeletePost(post.id);
+                                }}
                                 className="flex items-center gap-1 rounded-full border border-rose-500/40 bg-rose-500/10 px-3 py-1 text-xs font-semibold text-rose-100 transition hover:bg-rose-500/20"
                               >
                                 <Trash2 className="h-3 w-3" />
                                 Delete
                               </button>
                             )}
-                            <button
-                              type="button"
-                              onClick={() => toggleExpand(post.id)}
-                              className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 text-xs font-semibold text-cyan-100 hover:bg-cyan-500/20"
-                            >
-                              {expandedPosts[post.id] ? "Show less" : "Read more"}
-                            </button>
                           </div>
-                          {expandedPosts[post.id] && (
-                            <div className="mt-3 space-y-2">
-                              {details[post.id]?.theory && (
-                                <div>
-                                  <p className="text-xs uppercase tracking-[0.3em] text-fuchsia-400">
-                                    Theory
-                                  </p>
-                                  <p className="text-sm text-slate-200">
-                                    {details[post.id]?.theory}
-                                  </p>
-                                </div>
-                              )}
-                              {details[post.id]?.explanation && (
-                                <div>
-                                  <p className="text-xs uppercase tracking-[0.3em] text-emerald-400">
-                                    Explanation
-                                  </p>
-                                  <p className="text-sm text-slate-200">
-                                    {details[post.id]?.explanation}
-                                  </p>
-                                </div>
-                              )}
-                              {details[post.id]?.media_url && (
-                                <div className="overflow-hidden rounded-2xl border border-slate-800">
-                                  <div className="relative aspect-[16/9] max-h-96 w-full">
-                                    <Image
-                                      src={details[post.id]?.media_url as string}
-                                      alt="Lab upload"
-                                      className="object-cover"
-                                      fill
-                                      sizes="(max-width: 768px) 100vw, 768px"
-                                    />
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          )}
                         </div>
                       </div>
                     );
@@ -443,6 +388,169 @@ export default function ProfilePage() {
           </div>
         )}
       </div>
+      {activePostId && activePost && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"
+          onClick={closePostModal}
+        >
+          <div
+            className="relative max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-xl border border-slate-800 bg-slate-900 p-6"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={closePostModal}
+              className="absolute right-4 top-4 rounded-full border border-slate-700 bg-slate-800 px-3 py-1 text-xs font-semibold text-slate-200 hover:border-slate-500"
+            >
+              Close
+            </button>
+            {modalLoading ? (
+              <div className="flex items-center gap-2 text-sm text-slate-400">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading document...
+              </div>
+            ) : (
+              <div className="space-y-5">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+                    Research Document
+                  </p>
+                  <h3 className="mt-1 text-xl font-semibold text-slate-100">
+                    {activePost.title ?? "Untitled Experiment"}
+                  </h3>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <span
+                      className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide ${
+                        badgeStyles[activePost.wip_status as WipStatus] ??
+                        badgeStyles.Idea
+                      }`}
+                    >
+                      {activePost.wip_status}
+                    </span>
+                    <span className="text-xs text-slate-400">
+                      {activePost.created_at
+                        ? new Date(activePost.created_at).toLocaleString()
+                        : "Recently"}
+                    </span>
+                  </div>
+                </div>
+
+                {activePost.problem_statement && (
+                  <section className="space-y-2">
+                    <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+                      What is being explored
+                    </p>
+                    <p className="text-sm text-slate-200">
+                      {activePost.problem_statement}
+                    </p>
+                  </section>
+                )}
+
+                {activePost.theory && (
+                  <section className="space-y-2">
+                    <p className="text-xs uppercase tracking-[0.3em] text-fuchsia-300">
+                      Core Idea
+                    </p>
+                    <p className="text-sm text-slate-200">{activePost.theory}</p>
+                  </section>
+                )}
+
+                {(() => {
+                  const approach =
+                    activePost.approach ?? activePost.explanation ?? null;
+                  if (!approach) return null;
+                  return (
+                    <section className="space-y-2">
+                      <p className="text-xs uppercase tracking-[0.3em] text-cyan-300">
+                        Approach
+                      </p>
+                      <p className="text-sm text-slate-200">{approach}</p>
+                    </section>
+                  );
+                })()}
+
+                {activePost.observations && (
+                  <section className="space-y-2">
+                    <p className="text-xs uppercase tracking-[0.3em] text-emerald-300">
+                      Observations
+                    </p>
+                    <p className="text-sm text-slate-200">
+                      {activePost.observations}
+                    </p>
+                  </section>
+                )}
+
+                {activePost.reflection && (
+                  <section className="space-y-2">
+                    <p className="text-xs uppercase tracking-[0.3em] text-amber-300">
+                      Reflection
+                    </p>
+                    <p className="text-sm text-slate-200">
+                      {activePost.reflection}
+                    </p>
+                  </section>
+                )}
+
+                {(activePost.media_url || activePost.external_link) && (
+                  <section className="space-y-3">
+                    <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+                      Evidence
+                    </p>
+                    {activePost.media_url && (
+                      <div className="overflow-hidden rounded-2xl border border-slate-800">
+                        <div className="relative aspect-[16/9] max-h-96 w-full">
+                          <Image
+                            src={activePost.media_url}
+                            alt="Experiment evidence"
+                            className="object-cover"
+                            fill
+                            sizes="(max-width: 768px) 100vw, 768px"
+                          />
+                        </div>
+                      </div>
+                    )}
+                    {activePost.external_link && (
+                      <a
+                        href={activePost.external_link}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-1 text-xs font-semibold text-slate-200 transition hover:border-cyan-400/60 hover:text-cyan-100"
+                      >
+                        {activePost.external_link}
+                      </a>
+                    )}
+                  </section>
+                )}
+
+                {normalizeFeedback(activePost.feedback_needed).length > 0 && (
+                  <section className="space-y-3">
+                    <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+                      Feedback Requested
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {normalizeFeedback(activePost.feedback_needed).map((tag) => (
+                        <span
+                          key={tag}
+                          className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-100"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </section>
+                )}
+
+                <div className="border-t border-slate-800 pt-4">
+                  <PostComments
+                    postId={activePost.id}
+                    postOwnerId={activePost.user_id}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

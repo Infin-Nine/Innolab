@@ -32,6 +32,7 @@ type Profile = {
   bio?: string | null;
   skills?: string[] | string | null;
   badges?: string[] | string | null;
+  research_interest?: string | null;
 };
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
@@ -85,6 +86,7 @@ export default function Home() {
   const [profileUsername, setProfileUsername] = useState("");
   const [profileBio, setProfileBio] = useState("");
   const [profileSkills, setProfileSkills] = useState("");
+  const [profileResearchInterest, setProfileResearchInterest] = useState("");
   const [expandedPosts, setExpandedPosts] = useState<Record<string, boolean>>({});
 
   const envMissing = !supabaseUrl || !supabaseAnonKey;
@@ -108,6 +110,7 @@ export default function Home() {
         setProfileUsername("");
         setProfileBio("");
         setProfileSkills("");
+        setProfileResearchInterest("");
       }
     });
     return () => {
@@ -142,6 +145,7 @@ export default function Home() {
         setProfileData(data as Profile);
         setProfileUsername(data.username ?? "");
         setProfileBio(data.bio ?? "");
+        setProfileResearchInterest(data.research_interest ?? "");
         if (Array.isArray(data.skills)) {
           setProfileSkills(data.skills.join(", "));
         } else {
@@ -255,6 +259,7 @@ export default function Home() {
         username: profileUsername.trim(),
         bio: profileBio.trim(),
         skills,
+        research_interest: profileResearchInterest.trim() || null,
       })
       .eq("id", userId);
     if (error) {
@@ -266,6 +271,7 @@ export default function Home() {
       username: profileUsername.trim(),
       bio: profileBio.trim(),
       skills,
+      research_interest: profileResearchInterest.trim() || null,
     }));
     setIsEditProfileOpen(false);
   };
@@ -851,12 +857,23 @@ export default function Home() {
                                   </span>
                                 ))}
                           </div>
-                          <p className="mt-3 text-xs text-slate-500">
-                            Experiments: {userPosts.length} | Joined:{" "}
-                            {session.user.created_at
-                              ? new Date(session.user.created_at).getFullYear()
-                              : "—"}
-                          </p>
+                          <div className="mt-3 text-xs text-slate-500">
+                            <p>
+                              Experiments:{" "}
+                              {userPosts.length === 0 ? "—" : userPosts.length}
+                              {" | "}Joined:{" "}
+                              {session.user.created_at
+                                ? new Date(
+                                    session.user.created_at
+                                  ).getFullYear()
+                                : "—"}
+                            </p>
+                            {userPosts.length === 0 && (
+                              <p className="mt-1">
+                                Start your first experiment
+                              </p>
+                            )}
+                          </div>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
@@ -939,7 +956,7 @@ export default function Home() {
             </div>
             <div className="mt-4 space-y-4">
               <div className="space-y-1">
-                <label className="text-xs text-slate-400">Username</label>
+                <label className="text-xs text-slate-400">Display Name</label>
                 <input
                   value={profileUsername}
                   onChange={(event) => setProfileUsername(event.target.value)}
@@ -948,7 +965,7 @@ export default function Home() {
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-xs text-slate-400">Bio</label>
+                <label className="text-xs text-slate-400">About</label>
                 <textarea
                   value={profileBio}
                   onChange={(event) => setProfileBio(event.target.value)}
@@ -958,8 +975,19 @@ export default function Home() {
               </div>
               <div className="space-y-1">
                 <label className="text-xs text-slate-400">
-                  Skill Tags (comma separated)
+                  Research Interest (optional)
                 </label>
+                <input
+                  value={profileResearchInterest}
+                  onChange={(event) =>
+                    setProfileResearchInterest(event.target.value)
+                  }
+                  className="w-full rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+                  placeholder="e.g. Quantum algorithms, AI ethics, Climate models"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-slate-400">Topics (comma separated)</label>
                 <input
                   value={profileSkills}
                   onChange={(event) => setProfileSkills(event.target.value)}
