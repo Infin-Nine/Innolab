@@ -15,7 +15,7 @@ export default function CollaboratorsHome() {
           <p className="text-xs uppercase tracking-[0.3em] text-cyan-400">
             Discover
           </p>
-          <p className="mt-3 text-lg font-semibold">Discover Researchers</p>
+          <p className="mt-3 text-lg font-semibold">Explore Members</p>
           <p className="mt-2 text-sm text-slate-400">
             Explore profiles and initiate collaboration requests.
           </p>
@@ -37,11 +37,11 @@ export default function CollaboratorsHome() {
           className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6 text-sm text-slate-200 transition hover:border-emerald-400/60"
         >
           <p className="text-xs uppercase tracking-[0.3em] text-emerald-400">
-            My Collaborators
+            My Collaborations
           </p>
-          <p className="mt-3 text-lg font-semibold">Active Collaborators</p>
+          <p className="mt-3 text-lg font-semibold">Active Collaborations</p>
           <p className="mt-2 text-sm text-slate-400">
-            Researchers you are currently working with.
+            Members you are currently working with.
           </p>
         </Link>
       </div>

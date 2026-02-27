@@ -2,9 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
-import Image from "next/image";
 import { useEdit } from "../contexts/EditExperimentContext";
-import PostComments from "./PostComments";
+import UnifiedDocumentModal from "./UnifiedDocumentModal";
 import { useFeedbackSheet } from "../contexts/FeedbackSheetContext";
 
 type WipStatus =
@@ -69,18 +68,6 @@ const badgeLabels: Record<WipStatus, string> = {
   wip: "Exploring",
 };
 
-const normalizeFeedback = (value?: string[] | string | null) => {
-  if (!value) return [] as string[];
-  if (Array.isArray(value)) return value.map(String).filter(Boolean);
-  try {
-    const parsed = JSON.parse(value);
-    if (Array.isArray(parsed)) return parsed.map(String).filter(Boolean);
-  } catch {
-    return [String(value)];
-  }
-  return [String(value)];
-};
-
 export default function ResearchTimeline({
   userId,
   currentUserId,
@@ -92,6 +79,10 @@ export default function ResearchTimeline({
   const [posts, setPosts] = useState<Post[]>(initialPosts ?? []);
   const [loading, setLoading] = useState(!initialPosts);
   const [activePostId, setActivePostId] = useState<string | null>(null);
+  const [activeValidateCount, setActiveValidateCount] = useState(0);
+  const [activeIsValidated, setActiveIsValidated] = useState(false);
+  const [deleteTargetPostId, setDeleteTargetPostId] = useState<string | null>(null);
+  const [deletingPost, setDeletingPost] = useState(false);
   const { openEdit } = useEdit();
   const { open: openFeedback } = useFeedbackSheet();
   const isOwner = (post: Post) => currentUserId === post.user_id;
@@ -129,6 +120,15 @@ export default function ResearchTimeline({
   };
   const closeModal = () => {
     setActivePostId(null);
+  };
+
+  const requestDeletePost = (postId: string) => {
+    setDeleteTargetPostId(postId);
+  };
+
+  const cancelDeletePost = () => {
+    if (deletingPost) return;
+    setDeleteTargetPostId(null);
   };
 
 
@@ -173,7 +173,73 @@ export default function ResearchTimeline({
     openEdit(post.id);
   };
 
+  useEffect(() => {
+    let active = true;
+    const fetchModalValidationState = async () => {
+      if (!activePostId) {
+        setActiveValidateCount(0);
+        setActiveIsValidated(false);
+        return;
+      }
+      const { data } = await supabase
+        .from("validations")
+        .select("user_id")
+        .eq("post_id", activePostId);
+      if (!active) return;
+      const rows = (data as { user_id: string }[] | null) ?? [];
+      setActiveValidateCount(rows.length);
+      setActiveIsValidated(!!currentUserId && rows.some((row) => row.user_id === currentUserId));
+    };
+    void fetchModalValidationState();
+    return () => {
+      active = false;
+    };
+  }, [activePostId, currentUserId]);
+
+  const handleToggleValidate = async () => {
+    if (!activePost || !currentUserId) return;
+    if (activeIsValidated) {
+      const { error } = await supabase
+        .from("validations")
+        .delete()
+        .eq("post_id", activePost.id)
+        .eq("user_id", currentUserId);
+      if (!error) {
+        setActiveIsValidated(false);
+        setActiveValidateCount((prev) => Math.max(0, prev - 1));
+      }
+      return;
+    }
+    const { error } = await supabase
+      .from("validations")
+      .insert({ post_id: activePost.id, user_id: currentUserId });
+    if (!error) {
+      setActiveIsValidated(true);
+      setActiveValidateCount((prev) => prev + 1);
+    }
+  };
+
+  const confirmDeletePost = async () => {
+    if (!deleteTargetPostId || !currentUserId) return;
+    setDeletingPost(true);
+    const { error } = await supabase
+      .from("posts")
+      .delete()
+      .eq("id", deleteTargetPostId)
+      .eq("user_id", currentUserId);
+    if (error) {
+      console.error("Failed to delete post:", error.message);
+      setDeletingPost(false);
+      return;
+    }
+    setPosts((prev) => prev.filter((post) => post.id !== deleteTargetPostId));
+    setDeleteTargetPostId(null);
+    setActivePostId((prev) => (prev === deleteTargetPostId ? null : prev));
+    setDeletingPost(false);
+  };
+
   const items = useMemo(() => posts, [posts]);
+  const activePost = items.find((p) => p.id === activePostId) ?? null;
   const excerpt = (value: string, limit: number) =>
     value.length > limit ? `${value.slice(0, limit)}…` : value;
 
@@ -239,16 +305,28 @@ export default function ResearchTimeline({
                       <span className="text-xs text-slate-400">by {authorName}</span>
                     )}
                     {currentUserId === post.user_id && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openEditGlobal(post);
-                        }}
-                        className="rounded-full border border-cyan-500/40 bg-cyan-500/10 px-3 py-1 text-xs font-semibold text-cyan-100 transition hover:bg-cyan-500/20"
-                      >
-                        Edit
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEditGlobal(post);
+                          }}
+                          className="rounded-full border border-cyan-500/40 bg-cyan-500/10 px-3 py-1 text-xs font-semibold text-cyan-100 transition hover:bg-cyan-500/20"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            requestDeletePost(post.id);
+                          }}
+                          className="rounded-full border border-rose-500/40 bg-rose-500/10 px-3 py-1 text-xs font-semibold text-rose-100 transition hover:bg-rose-500/20"
+                        >
+                          Delete
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>
@@ -257,193 +335,50 @@ export default function ResearchTimeline({
           })
         )}
       </div>
-      {activePostId && (
-        <div
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-4"
-          onClick={closeModal}
-        >
-          <div
-            className="flex w-full max-w-3xl max-h-[90vh] flex-col overflow-hidden rounded-3xl border border-slate-800 bg-slate-950"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {(() => {
-              const post = items.find((p) => p.id === activePostId);
-              if (!post) return null;
-              const owner = isOwner(post);
-              const approach = post.approach ?? post.explanation ?? null;
-              const feedbackList = normalizeFeedback(post.feedback_needed);
-              return (
-                <>
-                  <div className="flex items-center justify-between border-b border-slate-800 px-6 py-4">
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.3em] text-cyan-400">
-                        Research Record
-                      </p>
-                      <p className="text-lg font-semibold text-slate-100">
-                        {post.title ?? "Untitled Experiment"}
-                      </p>
-                      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-400">
-                        {showAuthor && authorName && (
-                          <>
-                            <span className="text-cyan-200">{authorName}</span>
-                            <span>•</span>
-                          </>
-                        )}
-                        <span>
-                          {post.created_at
-                            ? new Date(post.created_at).toLocaleString()
-                            : "Recently"}
-                        </span>
-                        <span
-                          className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide ${
-                            badgeStyles[(post.wip_status ?? "idea") as WipStatus]
-                          }`}
-                        >
-                          {badgeLabels[(post.wip_status ?? "idea") as WipStatus]}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => openFeedback(post.id)}
-                        className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/20"
-                      >
-                        Add Insight
-                      </button>
-                      {owner && (
-                        <button
-                          type="button"
-                          className="rounded-full border border-cyan-500/40 bg-cyan-500/10 px-3 py-1 text-xs font-semibold text-cyan-100 transition hover:bg-cyan-500/20"
-                          onClick={() => openEditGlobal(post)}
-                        >
-                          Edit
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={closeModal}
-                        className="rounded-full border border-slate-700 px-3 py-1 text-xs font-semibold text-slate-200 transition hover:border-cyan-400/60 hover:text-cyan-100"
-                      >
-                        Close
-                      </button>
-                    </div>
-                  </div>
-                  <div className="flex-1 overflow-y-auto px-6 py-6">
-                    {
-                      <div className="space-y-5">
-                        {post.problem_statement && (
-                          <section className="space-y-2">
-                            <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
-                              What is being explored
-                            </p>
-                            <p className="text-sm text-slate-200">
-                              {post.problem_statement}
-                            </p>
-                          </section>
-                        )}
-                        {post.theory && (
-                          <section className="space-y-2">
-                            <p className="text-xs uppercase tracking-[0.3em] text-fuchsia-300">
-                              Core Idea
-                            </p>
-                            <p className="text-sm text-slate-200">{post.theory}</p>
-                          </section>
-                        )}
-                        {approach && (
-                          <section className="space-y-2">
-                            <p className="text-xs uppercase tracking-[0.3em] text-cyan-300">
-                              Approach
-                            </p>
-                            <p className="text-sm text-slate-200">{approach}</p>
-                          </section>
-                        )}
-                        {post.observations && (
-                          <section className="space-y-2">
-                            <p className="text-xs uppercase tracking-[0.3em] text-emerald-300">
-                              Observations
-                            </p>
-                            <p className="text-sm text-slate-200">
-                              {post.observations}
-                            </p>
-                          </section>
-                        )}
-                        {post.reflection && (
-                          <section className="space-y-2">
-                            <p className="text-xs uppercase tracking-[0.3em] text-amber-300">
-                              Reflection
-                            </p>
-                            <p className="text-sm text-slate-200">
-                              {post.reflection}
-                            </p>
-                          </section>
-                        )}
-                        {(post.media_url || post.external_link) && (
-                          <section className="space-y-3">
-                            <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
-                              Evidence
-                            </p>
-                            {post.media_url && (
-                              <div className="overflow-hidden rounded-2xl border border-slate-800">
-                                <div className="relative aspect-[16/9] max-h-96 w-full">
-                                  <Image
-                                    src={post.media_url}
-                                    alt="Experiment evidence"
-                                    className="object-cover"
-                                    fill
-                                    sizes="(max-width: 768px) 100vw, 768px"
-                                  />
-                                </div>
-                              </div>
-                            )}
-                            {post.external_link && (
-                              <a
-                                href={post.external_link}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-1 text-xs font-semibold text-slate-200 transition hover:border-cyan-400/60 hover:text-cyan-100"
-                              >
-                                {post.external_link}
-                              </a>
-                            )}
-                          </section>
-                        )}
-                        {feedbackList.length > 0 && (
-                          <section className="space-y-3">
-                            <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
-                              Feedback Requested
-                            </p>
-                            <div className="flex flex-wrap gap-2">
-                              {feedbackList.map((tag) => (
-                                <span
-                                  key={tag}
-                                  className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-100"
-                                >
-                                  {tag}
-                                </span>
-                              ))}
-                            </div>
-                          </section>
-                        )}
-                      </div>
-                    }
-                  </div>
-                </>
-              );
-            })()}
+      <UnifiedDocumentModal
+        open={!!activePost}
+        post={activePost}
+        statusClassName={
+          activePost ? badgeStyles[(activePost.wip_status ?? "idea") as WipStatus] : undefined
+        }
+        authorName={showAuthor ? authorName : null}
+        onValidate={activePost ? handleToggleValidate : undefined}
+        isValidated={activeIsValidated}
+        validateCount={activePost ? activeValidateCount : undefined}
+        onAddInsight={activePost ? () => openFeedback(activePost.id) : undefined}
+        onEdit={activePost ? () => openEditGlobal(activePost) : undefined}
+        canEdit={!!(activePost && isOwner(activePost))}
+        onClose={closeModal}
+      />
+      {deleteTargetPostId && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-md rounded-3xl border border-slate-800 bg-slate-950 p-6">
+            <h3 className="text-lg font-semibold text-slate-100">Delete this record?</h3>
+            <p className="mt-3 text-sm text-slate-300">
+              This action cannot be undone. The record and all related insights will be permanently removed.
+            </p>
+            <div className="mt-6 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={cancelDeletePost}
+                disabled={deletingPost}
+                className="rounded-full border border-slate-700 px-4 py-2 text-xs font-semibold text-slate-300 transition hover:border-slate-500 hover:text-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeletePost}
+                disabled={deletingPost}
+                className="rounded-full border border-rose-500/40 bg-rose-500/10 px-4 py-2 text-xs font-semibold text-rose-100 transition hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Delete
+              </button>
+            </div>
           </div>
-          {(() => {
-            const post = items.find((p) => p.id === activePostId);
-            if (!post) return null;
-            return (
-              <div className="border-t border-slate-800 px-6 py-6">
-                <PostComments postId={post.id} postOwnerId={post.user_id} />
-              </div>
-            );
-          })()}
         </div>
       )}
-      
     </>
   );
 }
+

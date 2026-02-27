@@ -9,6 +9,7 @@ import LabNotebook from "./components/LabNotebook";
 import { supabase } from "./lib/supabaseClient";
 import type { Post } from "./types/models";
 import {
+  AlertTriangle,
   Atom,
   ImageUp,
   LayoutGrid,
@@ -56,6 +57,8 @@ export default function Home() {
 
   const [isPostModalOpen, setIsPostModalOpen] = useState(false);
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
+  const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const [profileData, setProfileData] = useState<Profile | null>(null);
   const [, setProfileLoading] = useState(false);
@@ -175,7 +178,20 @@ export default function Home() {
     setIsAuthModalOpen(false);
   };
 
-  // removed sign-out from dashboard; logout available on profile page only
+  const handleSignOutRequest = () => {
+    setIsLogoutConfirmOpen(true);
+  };
+
+  const handleSignOutCancel = () => {
+    if (isLoggingOut) return;
+    setIsLogoutConfirmOpen(false);
+  };
+
+  const handleSignOutConfirm = async () => {
+    setIsLoggingOut(true);
+    await supabase.auth.signOut();
+    window.location.assign("/");
+  };
 
   const handleEditProfileSave = async () => {
     if (!userId) {
@@ -267,7 +283,7 @@ export default function Home() {
               </div>
               <div>
                 <p className="text-lg font-semibold">InnoLab</p>
-                <p className="text-xs text-slate-400">Research Network</p>
+                <p className="text-xs text-slate-400">Open Research & Innovation Network</p>
               </div>
             </div>
             <button
@@ -525,7 +541,7 @@ export default function Home() {
             </div>
             <div>
               <p className="text-lg font-semibold">InnoLab</p>
-              <p className="text-xs text-slate-400">Research Network</p>
+              <p className="text-xs text-slate-400">Open Research & Innovation Network</p>
             </div>
           </div>
           <nav className="mt-8 space-y-2">
@@ -551,7 +567,7 @@ export default function Home() {
               }`}
             >
               <UserRound className="h-4 w-4" />
-              Research Profile
+              Profile
             </button>
             <Link
               href="/collaborators"
@@ -559,6 +575,13 @@ export default function Home() {
             >
               <Users className="h-4 w-4" />
               Collaborations
+            </Link>
+            <Link
+              href="/problems"
+              className="flex w-full items-center gap-3 rounded-xl border border-transparent bg-slate-900/40 px-4 py-3 text-left text-sm font-semibold text-slate-300 transition hover:border-cyan-400/70 hover:text-cyan-100"
+            >
+              <AlertTriangle className="h-4 w-4" />
+              Problem Space
             </Link>
           </nav>
           <div className="mt-8 rounded-2xl border border-slate-800 bg-slate-900/60 p-4 text-xs text-slate-400">
@@ -708,7 +731,7 @@ export default function Home() {
                     The Lab
                   </p>
                   <h2 className="text-2xl font-semibold">
-                    Document Experiments With Structured Proof
+                    Document Your Work With Clear Evidence
                   </h2>
                 </div>
                 <button
@@ -737,10 +760,10 @@ export default function Home() {
             <section className="space-y-6">
               <header>
                 <p className="text-xs uppercase tracking-[0.3em] text-emerald-400">
-                  Research Profile
+                  Profile
                 </p>
                 <h2 className="text-2xl font-semibold">
-                  Your public research profile and activity history.
+                  Your public profile and work history.
                 </h2>
               </header>
               {!session ? (
@@ -778,6 +801,18 @@ export default function Home() {
                             {profileData?.bio ||
                               "Share your research focus and background."}
                           </p>
+                          {profileData?.research_interest && (
+                            <div className="mt-3 max-w-[52ch]">
+                              <p className="text-[10px] uppercase tracking-[0.3em] text-slate-500">
+                                Primary Focus Area
+                              </p>
+                              <div className="mt-1 flex flex-wrap gap-2">
+                                <span className="rounded-full border border-slate-700 bg-slate-900/60 px-3 py-1 text-xs text-slate-300 break-words">
+                                  {profileData.research_interest}
+                                </span>
+                              </div>
+                            </div>
+                          )}
                           <div className="mt-3 flex flex-wrap gap-2">
                             {profileData &&
                               formatSkills(profileData)
@@ -833,9 +868,7 @@ export default function Home() {
                         </button>
                         <button
                           type="button"
-                          onClick={async () => {
-                            await supabase.auth.signOut();
-                          }}
+                          onClick={handleSignOutRequest}
                           className="flex items-center gap-2 rounded-full border border-rose-500/40 bg-rose-500/10 px-4 py-2 text-xs font-semibold text-rose-100 transition hover:bg-rose-500/20"
                         >
                           Log out
@@ -845,7 +878,7 @@ export default function Home() {
                     <div className="mt-6 border-t border-slate-800 pt-4" />
                   </div>
                   <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
-                    <h2 className="text-lg font-semibold">Research Timeline</h2>
+                    <h2 className="text-lg font-semibold">Work Timeline</h2>
                     <div className="mt-4">
                       <ResearchTimeline
                         userId={userId ?? ""}
@@ -870,14 +903,14 @@ export default function Home() {
 
       {isEditProfileOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="w-full max-w-lg rounded-3xl border border-slate-800 bg-slate-950 p-6">
+          <div className="flex w-full max-w-lg max-h-[85vh] flex-col overflow-hidden rounded-3xl border border-slate-800 bg-slate-950 p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs uppercase tracking-[0.3em] text-emerald-400">
                   Edit Profile
                 </p>
                 <p className="text-base font-semibold text-slate-100">
-                  Update your researcher card
+                  Edit Your Profile
                 </p>
               </div>
               <button
@@ -888,9 +921,12 @@ export default function Home() {
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <div className="mt-4 space-y-4">
+            <div className="mt-4 flex-1 space-y-4 overflow-y-auto pr-1 pb-4">
               <div className="space-y-1">
                 <label className="text-xs text-slate-400">Display Name</label>
+                <p className="text-xs text-slate-500">
+                  The name others will see when reading your work.
+                </p>
                 <input
                   value={profileUsername}
                   onChange={(event) => setProfileUsername(event.target.value)}
@@ -904,29 +940,32 @@ export default function Home() {
                   value={profileBio}
                   onChange={(event) => setProfileBio(event.target.value)}
                   className="min-h-[100px] w-full rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
-                  placeholder="Share your research focus and background."
+                  placeholder="Briefly describe what you work on and the kind of problems you care about."
                 />
               </div>
               <div className="space-y-1">
                 <label className="text-xs text-slate-400">
-                  Research Interest (optional)
+                  Primary Interest (optional)
                 </label>
+                <p className="text-xs text-slate-500">
+                  Examples: machine learning, behavioral science, renewable energy, distributed systems
+                </p>
                 <input
                   value={profileResearchInterest}
                   onChange={(event) =>
                     setProfileResearchInterest(event.target.value)
                   }
                   className="w-full rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
-                  placeholder="e.g. Quantum algorithms, AI ethics, Climate models"
+                  placeholder="Topics or fields you are currently exploring."
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-xs text-slate-400">Topics (comma separated)</label>
+                <label className="text-xs text-slate-400">Areas of Work</label>
                 <input
                   value={profileSkills}
                   onChange={(event) => setProfileSkills(event.target.value)}
                   className="w-full rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
-                  placeholder="Coder, Designer, Researcher"
+                  placeholder="How do you usually contribute?"
                 />
               </div>
               {profileMessage && (
@@ -955,6 +994,35 @@ export default function Home() {
           </div>
         </div>
       )}
+      {isLogoutConfirmOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-md rounded-3xl border border-slate-800 bg-slate-950 p-6">
+            <h3 className="text-lg font-semibold text-slate-100">Log out?</h3>
+            <p className="mt-3 text-sm text-slate-300">
+              You will be signed out of your account on this device.
+            </p>
+            <div className="mt-6 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={handleSignOutCancel}
+                disabled={isLoggingOut}
+                className="rounded-full border border-slate-700 px-4 py-2 text-xs font-semibold text-slate-300 transition hover:border-slate-500 hover:text-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleSignOutConfirm()}
+                disabled={isLoggingOut}
+                className="rounded-full border border-rose-500/40 bg-rose-500/10 px-4 py-2 text-xs font-semibold text-rose-100 transition hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isLoggingOut ? "Logging out..." : "Log out"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+

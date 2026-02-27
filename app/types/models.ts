@@ -19,6 +19,8 @@ export type Profile = {
 export type Post = {
   id: string;
   user_id: string;
+  problem_id?: string | null;
+  problem_title?: string | null;
   title: string | null;
   problem_statement: string | null;
   theory?: string | null;
@@ -32,6 +34,10 @@ export type Post = {
   media_url: string | null;
   created_at: string | null;
   profiles?: Profile | Profile[] | null;
+  problems?:
+    | { id?: string | null; title?: string | null }
+    | { id?: string | null; title?: string | null }[]
+    | null;
   validations?: { count: number }[];
   solutions?: { count: number }[];
 };
@@ -43,5 +49,3 @@ export type Solution = {
   content: string;
   created_at: string | null;
 };
-
-

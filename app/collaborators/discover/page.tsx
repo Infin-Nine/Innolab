@@ -108,7 +108,7 @@ export default function CollabDiscoverPage() {
 
   return (
     <CollabLayout
-      title="Discover Researchers"
+      title="Explore Members"
       subtitle="Browse profiles and signal your collaboration intent."
     >
       <div className="mb-6">

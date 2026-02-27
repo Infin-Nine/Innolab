@@ -10,6 +10,8 @@ import type { Profile, Solution } from "../types/models";
 type Props = {
   postId: string;
   postOwnerId?: string;
+  compactSpacing?: boolean;
+  showInlineAddButton?: boolean;
 };
 
 const parseType = (content: string) => {
@@ -20,7 +22,12 @@ const parseType = (content: string) => {
   return { type: "Insight", text: content };
 };
 
-export default function PostComments({ postId, postOwnerId }: Props) {
+export default function PostComments({
+  postId,
+  postOwnerId,
+  compactSpacing = false,
+  showInlineAddButton = true,
+}: Props) {
   const [items, setItems] = useState<Solution[]>([]);
   const [authors, setAuthors] = useState<Record<string, Profile>>({});
   const [loading, setLoading] = useState(false);
@@ -122,11 +129,14 @@ export default function PostComments({ postId, postOwnerId }: Props) {
     }
   };
 
+  const sectionTopGap = compactSpacing ? "mt-0" : "mt-8";
+  const contentTopGap = compactSpacing ? "mt-[clamp(0.5rem,1.2vh,1rem)]" : "mt-4";
+
   return (
-    <div className="mt-8">
+    <div className={sectionTopGap}>
       <div className="flex items-center justify-between">
         <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
-          Feedback & Discussion
+          Discussion
         </p>
       </div>
 
@@ -136,7 +146,7 @@ export default function PostComments({ postId, postOwnerId }: Props) {
         </div>
       )}
 
-      <div className="mt-6">
+      <div className={contentTopGap}>
         {loading ? (
           <div className="flex items-center gap-2 text-sm text-slate-400">
             <span className="h-4 w-4 animate-spin rounded-full border-2 border-cyan-400/50 border-t-transparent" />
@@ -144,20 +154,22 @@ export default function PostComments({ postId, postOwnerId }: Props) {
           </div>
         ) : items.length === 0 ? (
           <div>
-            <p className="text-sm text-slate-400">No feedback yet.</p>
-            <div className="mt-3 flex justify-end">
-              {userId ? (
-                <button
-                  type="button"
-                  onClick={startCreate}
-                  className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/20"
-                >
-                  Add Insight
-                </button>
-              ) : (
-                <span className="text-xs text-slate-400">Login to provide insight.</span>
-              )}
-            </div>
+            <p className="text-sm text-slate-400">No insights yet.</p>
+            {showInlineAddButton && (
+              <div className="mt-3 flex justify-end">
+                {userId ? (
+                  <button
+                    type="button"
+                    onClick={startCreate}
+                    className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/20"
+                  >
+                    Add Insight
+                  </button>
+                ) : (
+                  <span className="text-xs text-slate-400">Login to provide insight.</span>
+                )}
+              </div>
+            )}
           </div>
         ) : (
           <div className="space-y-3">
@@ -213,19 +225,21 @@ export default function PostComments({ postId, postOwnerId }: Props) {
                 </div>
               );
             })}
-            <div className="flex justify-end">
-              {userId ? (
-                <button
-                  type="button"
-                  onClick={startCreate}
-                  className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/20"
-                >
-                  Add Insight
-                </button>
-              ) : (
-                <span className="text-xs text-slate-400">Login to provide insight.</span>
-              )}
-            </div>
+            {showInlineAddButton && (
+              <div className="flex justify-end">
+                {userId ? (
+                  <button
+                    type="button"
+                    onClick={startCreate}
+                    className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/20"
+                  >
+                    Add Insight
+                  </button>
+                ) : (
+                  <span className="text-xs text-slate-400">Login to provide insight.</span>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>

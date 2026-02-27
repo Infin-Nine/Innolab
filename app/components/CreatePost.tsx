@@ -19,6 +19,8 @@ type Props = {
   isOpen: boolean;
   onClose: () => void;
   onPostCreated?: () => void;
+  linkedProblemId?: string | null;
+  linkedProblemTitle?: string | null;
 };
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
@@ -49,9 +51,16 @@ const feedbackOptions = [
   "Identify possible flaws",
   "Recommend resources",
   "Open to collaboration",
+  "Interested in commercialization",
 ];
 
-export default function CreatePost({ isOpen, onClose, onPostCreated }: Props) {
+export default function CreatePost({
+  isOpen,
+  onClose,
+  onPostCreated,
+  linkedProblemId,
+  linkedProblemTitle,
+}: Props) {
   const [title, setTitle] = useState("");
   const [problem, setProblem] = useState("");
   const [stage, setStage] = useState<Stage>("idea");
@@ -114,6 +123,7 @@ export default function CreatePost({ isOpen, onClose, onPostCreated }: Props) {
       title: string;
       wip_status: WipStatus;
       media_url: string | null;
+      problem_id?: string;
       problem_statement?: string;
       theory?: string;
       explanation?: string;
@@ -136,6 +146,7 @@ export default function CreatePost({ isOpen, onClose, onPostCreated }: Props) {
     if (reflection.trim()) payload.reflection = reflection.trim();
     if (feedbackNeeded.length) payload.feedback_needed = feedbackNeeded;
     if (externalLink.trim()) payload.external_link = externalLink.trim();
+    if (linkedProblemId?.trim()) payload.problem_id = linkedProblemId.trim();
     const { error: insertError } = await supabase.from("posts").insert(payload);
     if (insertError) {
       const fallbackStatus = stageFallback[stage];
@@ -174,7 +185,15 @@ export default function CreatePost({ isOpen, onClose, onPostCreated }: Props) {
             <p className="text-xs uppercase tracking-[0.3em] text-cyan-400">
               New Experiment
             </p>
-            <h3 className="text-lg font-semibold">Document your experiment</h3>
+            <h3 className="text-lg font-semibold">Share Your Work</h3>
+            <p className="text-sm text-slate-400">
+              Document what you&apos;re developing, testing, or improving.
+            </p>
+            {linkedProblemId && (
+              <p className="mt-2 inline-flex rounded-full border border-amber-500/40 bg-amber-500/10 px-3 py-1 text-xs text-amber-100">
+                Linked to Problem: {linkedProblemTitle?.trim() || linkedProblemId}
+              </p>
+            )}
           </div>
           <button
             type="button"
@@ -190,7 +209,7 @@ export default function CreatePost({ isOpen, onClose, onPostCreated }: Props) {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
-                    Core Overview
+                    Core Information
                   </p>
                   <p className="text-sm font-semibold text-slate-100">
                     Required foundation
@@ -237,17 +256,44 @@ export default function CreatePost({ isOpen, onClose, onPostCreated }: Props) {
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs text-slate-400">
-                    What are you exploring?
+                    Problem you are addressing
                   </label>
                   <p className="text-xs text-slate-500">
-                    Describe the specific problem, question, or curiosity you are
-                    working on.
+                    Describe the real-world issue or research question.
                   </p>
                   <textarea
                     value={problem}
                     onChange={(e) => setProblem(e.target.value)}
                     className="min-h-[120px] w-full rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
                     placeholder="State the core focus of the experiment."
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-400">
+                    What are you working on?
+                  </label>
+                  <p className="text-xs text-slate-500">
+                    Briefly explain what you are working on.
+                  </p>
+                  <textarea
+                    value={approach}
+                    onChange={(e) => setApproach(e.target.value)}
+                    className="min-h-[100px] w-full rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
+                    placeholder="Outline the methods or workflow."
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-400">
+                    Current results
+                  </label>
+                  <p className="text-xs text-slate-500">
+                    What has worked so far? Include measurable outcomes if available.
+                  </p>
+                  <textarea
+                    value={observations}
+                    onChange={(e) => setObservations(e.target.value)}
+                    className="min-h-[100px] w-full rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+                    placeholder="Capture outcomes and signals."
                   />
                 </div>
               </div>
@@ -260,10 +306,10 @@ export default function CreatePost({ isOpen, onClose, onPostCreated }: Props) {
               >
                 <div>
                   <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
-                    Thinking Process
+                    Detailed Information
                   </p>
                   <p className="text-sm font-semibold text-slate-100">
-                    Optional deep dive
+                    Add detailed information (optional)
                   </p>
                 </div>
                 <ChevronDown
@@ -276,9 +322,11 @@ export default function CreatePost({ isOpen, onClose, onPostCreated }: Props) {
                 <div className="border-t border-slate-800 px-4 pb-4 pt-3">
                   <div className="space-y-4">
                     <div className="space-y-1">
-                      <label className="text-xs text-slate-400">Core Idea</label>
+                      <label className="text-xs text-slate-400">
+                        Reasoning behind your approach
+                      </label>
                       <p className="text-xs text-slate-500">
-                        What do you think might work, and why?
+                        Explain the logic or assumptions behind your approach.
                       </p>
                       <textarea
                         value={coreIdea}
@@ -288,29 +336,14 @@ export default function CreatePost({ isOpen, onClose, onPostCreated }: Props) {
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-xs text-slate-400">Approach</label>
-                      <p className="text-xs text-slate-500">
-                        What steps, tools, or setup are you using?
-                      </p>
-                      <textarea
-                        value={approach}
-                        onChange={(e) => setApproach(e.target.value)}
-                        className="min-h-[100px] w-full rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
-                        placeholder="Outline the methods or workflow."
-                      />
-                    </div>
-                    <div className="space-y-1">
                       <label className="text-xs text-slate-400">
-                        Observations
+                        Additional notes (optional)
                       </label>
-                      <p className="text-xs text-slate-500">
-                        What has happened so far? What worked or failed?
-                      </p>
                       <textarea
-                        value={observations}
-                        onChange={(e) => setObservations(e.target.value)}
+                        value={reflection}
+                        onChange={(e) => setReflection(e.target.value)}
                         className="min-h-[100px] w-full rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
-                        placeholder="Capture outcomes and signals."
+                        placeholder="Summarize the key takeaway."
                       />
                     </div>
                   </div>
@@ -325,10 +358,10 @@ export default function CreatePost({ isOpen, onClose, onPostCreated }: Props) {
               >
                 <div>
                   <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
-                    Reflection & Feedback
+                    Feedback
                   </p>
                   <p className="text-sm font-semibold text-slate-100">
-                    Optional insights
+                    What kind of feedback are you looking for?
                   </p>
                 </div>
                 <ChevronDown
@@ -340,17 +373,6 @@ export default function CreatePost({ isOpen, onClose, onPostCreated }: Props) {
               {reflectionOpen && (
                 <div className="border-t border-slate-800 px-4 pb-4 pt-3">
                   <div className="space-y-4">
-                    <div className="space-y-1">
-                      <label className="text-xs text-slate-400">
-                        What did you learn?
-                      </label>
-                      <textarea
-                        value={reflection}
-                        onChange={(e) => setReflection(e.target.value)}
-                        className="min-h-[100px] w-full rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
-                        placeholder="Summarize the key takeaway."
-                      />
-                    </div>
                     <div className="space-y-2">
                       <label className="text-xs text-slate-400">
                         Feedback Needed
@@ -392,6 +414,9 @@ export default function CreatePost({ isOpen, onClose, onPostCreated }: Props) {
             <section className="rounded-3xl border border-slate-800 bg-slate-950/60 p-4">
               <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
                 Evidence
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                Upload supporting media, documentation, or progress snapshots.
               </p>
               <div className="mt-4 space-y-4">
                 <div className="space-y-1">

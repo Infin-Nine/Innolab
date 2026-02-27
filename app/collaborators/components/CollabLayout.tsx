@@ -19,7 +19,7 @@ export default function CollabLayout({ title, subtitle, children }: Props) {
             </div>
             <div>
               <p className="text-lg font-semibold">InnoLab</p>
-              <p className="text-xs text-slate-400">Research Network</p>
+              <p className="text-xs text-slate-400">Open Research & Innovation Network</p>
             </div>
           </div>
           <nav className="mt-8 space-y-2">

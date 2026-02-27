@@ -6,7 +6,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { createClient } from "@supabase/supabase-js";
 import CollabButton from "../../components/CollabButton";
-import PostComments from "../../components/PostComments";
+import UnifiedDocumentModal from "../../components/UnifiedDocumentModal";
+import { useFeedbackSheet } from "../../contexts/FeedbackSheetContext";
 import { ArrowLeft, FlaskConical, Loader2, Trash2 } from "lucide-react";
 
 type WipStatus = "Idea" | "Prototyping" | "Testing" | "Failed" | "Succeeded";
@@ -19,12 +20,14 @@ type Profile = {
   avatar_url?: string | null;
   bio?: string | null;
   skills?: string[] | string | null;
+  research_interest?: string | null;
 };
 
 type Post = {
   id: string;
   user_id: string;
   title: string | null;
+  description?: string | null;
   problem_statement: string | null;
   theory?: string | null;
   explanation?: string | null;
@@ -88,18 +91,6 @@ const getInitials = (name: string) => {
   return initials.join("") || "IN";
 };
 
-const normalizeFeedback = (value?: string[] | string | null) => {
-  if (!value) return [] as string[];
-  if (Array.isArray(value)) return value.map(String).filter(Boolean);
-  try {
-    const parsed = JSON.parse(value);
-    if (Array.isArray(parsed)) return parsed.map(String).filter(Boolean);
-  } catch {
-    return [String(value)];
-  }
-  return [String(value)];
-};
-
 export default function ProfilePage() {
   const params = useParams();
   const profileId = params?.id as string;
@@ -108,7 +99,11 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [activePostId, setActivePostId] = useState<string | null>(null);
-  const [modalLoading, setModalLoading] = useState(false);
+  const [activeValidateCount, setActiveValidateCount] = useState(0);
+  const [activeIsValidated, setActiveIsValidated] = useState(false);
+  const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const { open: openFeedback } = useFeedbackSheet();
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -123,25 +118,6 @@ export default function ProfilePage() {
   }, []);
 
   useEffect(() => {
-    if (!activePostId) {
-      return;
-    }
-    const previousOverflow = document.body.style.overflow;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setActivePostId(null);
-      }
-    };
-    document.body.style.overflow = "hidden";
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", onKeyDown);
-    };
-  }, [activePostId]);
-
-
-  useEffect(() => {
     if (!profileId) {
       return;
     }
@@ -154,13 +130,16 @@ export default function ProfilePage() {
         .maybeSingle();
       const { data: postData } = await supabase
         .from("posts")
-        .select(
-          "id, user_id, title, problem_statement, theory, explanation, approach, observations, reflection, feedback_needed, external_link, media_url, wip_status, created_at"
-        )
+        .select("*")
         .eq("user_id", profileId)
         .order("created_at", { ascending: false });
       setProfile((profileData as Profile) ?? null);
-      setPosts((postData as Post[]) ?? []);
+      const normalizedPosts =
+        ((postData as Post[] | null) ?? []).map((post) => ({
+          ...post,
+          description: post.description ?? post.problem_statement ?? null,
+        }));
+      setPosts(normalizedPosts);
       setLoading(false);
     };
     fetchProfile();
@@ -168,20 +147,74 @@ export default function ProfilePage() {
 
   const skills = useMemo(() => formatSkills(profile), [profile]);
 
-  const openPostModal = async (postId: string) => {
+  const openPostModal = (postId: string) => {
     setActivePostId(postId);
-    setModalLoading(true);
-    // Reuse the existing Research Record document view behavior
-    // by letting the shared comments/insights component handle feedback state.
-    setModalLoading(false);
+    // Reuse the unified document modal behavior
   };
 
   const closePostModal = () => {
     setActivePostId(null);
   };
 
-  const handleSignOut = async () => {
+  useEffect(() => {
+    let active = true;
+    const fetchModalValidationState = async () => {
+      if (!activePostId) {
+        setActiveValidateCount(0);
+        setActiveIsValidated(false);
+        return;
+      }
+      const { data } = await supabase
+        .from("validations")
+        .select("user_id")
+        .eq("post_id", activePostId);
+      if (!active) return;
+      const rows = (data as { user_id: string }[] | null) ?? [];
+      setActiveValidateCount(rows.length);
+      setActiveIsValidated(!!currentUserId && rows.some((row) => row.user_id === currentUserId));
+    };
+    void fetchModalValidationState();
+    return () => {
+      active = false;
+    };
+  }, [activePostId, currentUserId]);
+
+  const handleToggleValidate = async () => {
+    if (!activePost || !currentUserId) return;
+    if (activeIsValidated) {
+      const { error } = await supabase
+        .from("validations")
+        .delete()
+        .eq("post_id", activePost.id)
+        .eq("user_id", currentUserId);
+      if (!error) {
+        setActiveIsValidated(false);
+        setActiveValidateCount((prev) => Math.max(0, prev - 1));
+      }
+      return;
+    }
+    const { error } = await supabase
+      .from("validations")
+      .insert({ post_id: activePost.id, user_id: currentUserId });
+    if (!error) {
+      setActiveIsValidated(true);
+      setActiveValidateCount((prev) => prev + 1);
+    }
+  };
+
+  const handleSignOutRequest = () => {
+    setIsLogoutConfirmOpen(true);
+  };
+
+  const handleSignOutCancel = () => {
+    if (isLoggingOut) return;
+    setIsLogoutConfirmOpen(false);
+  };
+
+  const handleSignOutConfirm = async () => {
+    setIsLoggingOut(true);
     await supabase.auth.signOut();
+    window.location.assign("/");
   };
 
   const handleDeletePost = async (postId: string) => {
@@ -204,10 +237,7 @@ export default function ProfilePage() {
     }
   };
 
-  const activePost = useMemo(
-    () => posts.find((post) => post.id === activePostId) ?? null,
-    [posts, activePostId]
-  );
+  const activePost = posts.find((post) => post.id === activePostId) ?? null;
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#0f172a,_#020617_55%)] text-slate-100">
@@ -223,7 +253,7 @@ export default function ProfilePage() {
           {currentUserId === profileId && (
             <button
               type="button"
-              onClick={handleSignOut}
+              onClick={handleSignOutRequest}
               className="rounded-full border border-rose-500/40 bg-rose-500/10 px-4 py-2 text-xs font-semibold text-rose-100 transition hover:bg-rose-500/20"
             >
               Log out
@@ -261,6 +291,18 @@ export default function ProfilePage() {
                     <p className="text-sm text-slate-400 truncate max-w-[60ch]">
                       {profile?.bio || "This innovator has not added a bio yet."}
                     </p>
+                    {profile?.research_interest && (
+                      <div className="mt-3 max-w-[60ch]">
+                        <p className="text-[10px] uppercase tracking-[0.3em] text-slate-500">
+                          Primary Focus Area
+                        </p>
+                        <div className="mt-1 flex flex-wrap gap-2">
+                          <span className="rounded-full border border-slate-700 bg-slate-900/60 px-3 py-1 text-xs text-slate-300 break-words">
+                            {profile.research_interest}
+                          </span>
+                        </div>
+                      </div>
+                    )}
                     <div className="mt-3 flex flex-wrap gap-2">
                       {skills.length ? (
                         skills.slice(0, 3).map((skill) => (
@@ -304,7 +346,7 @@ export default function ProfilePage() {
                       </Link>
                       <button
                         type="button"
-                        onClick={handleSignOut}
+                        onClick={handleSignOutRequest}
                         className="rounded-full border border-rose-500/40 bg-rose-500/10 px-4 py-2 text-xs font-semibold text-rose-100 transition hover:bg-rose-500/20"
                       >
                         Log out
@@ -320,7 +362,7 @@ export default function ProfilePage() {
             </div>
 
             <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
-              <h2 className="text-lg font-semibold">Research Timeline</h2>
+              <h2 className="text-lg font-semibold">Work Timeline</h2>
               <div className="mt-4 space-y-3">
                 {posts.length === 0 ? (
                   <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-800 bg-slate-950/70 p-8 text-center">
@@ -408,169 +450,47 @@ export default function ProfilePage() {
           </div>
         )}
       </div>
-      {activePostId && activePost && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"
-          onClick={closePostModal}
-        >
-          <div
-            className="relative max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-xl border border-slate-800 bg-slate-900 p-6"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <button
-              type="button"
-              onClick={closePostModal}
-              className="absolute right-4 top-4 rounded-full border border-slate-700 bg-slate-800 px-3 py-1 text-xs font-semibold text-slate-200 hover:border-slate-500"
-            >
-              Close
-            </button>
-            {modalLoading ? (
-              <div className="flex items-center gap-2 text-sm text-slate-400">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Loading document...
-              </div>
-            ) : (
-              <div className="space-y-5">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
-                    Research Document
-                  </p>
-                  <h3 className="mt-1 text-xl font-semibold text-slate-100">
-                    {activePost.title ?? "Untitled Experiment"}
-                  </h3>
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
-                    <span
-                      className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide ${
-                        badgeStyles[activePost.wip_status as WipStatus] ??
-                        badgeStyles.Idea
-                      }`}
-                    >
-                      {activePost.wip_status}
-                    </span>
-                    <span className="text-xs text-slate-400">
-                      {activePost.created_at
-                        ? new Date(activePost.created_at).toLocaleString()
-                        : "Recently"}
-                    </span>
-                  </div>
-                </div>
-
-                {activePost.problem_statement && (
-                  <section className="space-y-2">
-                    <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
-                      What is being explored
-                    </p>
-                    <p className="text-sm text-slate-200">
-                      {activePost.problem_statement}
-                    </p>
-                  </section>
-                )}
-
-                {activePost.theory && (
-                  <section className="space-y-2">
-                    <p className="text-xs uppercase tracking-[0.3em] text-fuchsia-300">
-                      Core Idea
-                    </p>
-                    <p className="text-sm text-slate-200">{activePost.theory}</p>
-                  </section>
-                )}
-
-                {(() => {
-                  const approach =
-                    activePost.approach ?? activePost.explanation ?? null;
-                  if (!approach) return null;
-                  return (
-                    <section className="space-y-2">
-                      <p className="text-xs uppercase tracking-[0.3em] text-cyan-300">
-                        Approach
-                      </p>
-                      <p className="text-sm text-slate-200">{approach}</p>
-                    </section>
-                  );
-                })()}
-
-                {activePost.observations && (
-                  <section className="space-y-2">
-                    <p className="text-xs uppercase tracking-[0.3em] text-emerald-300">
-                      Observations
-                    </p>
-                    <p className="text-sm text-slate-200">
-                      {activePost.observations}
-                    </p>
-                  </section>
-                )}
-
-                {activePost.reflection && (
-                  <section className="space-y-2">
-                    <p className="text-xs uppercase tracking-[0.3em] text-amber-300">
-                      Reflection
-                    </p>
-                    <p className="text-sm text-slate-200">
-                      {activePost.reflection}
-                    </p>
-                  </section>
-                )}
-
-                {(activePost.media_url || activePost.external_link) && (
-                  <section className="space-y-3">
-                    <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
-                      Evidence
-                    </p>
-                    {activePost.media_url && (
-                      <div className="overflow-hidden rounded-2xl border border-slate-800">
-                        <div className="relative aspect-[16/9] max-h-96 w-full">
-                          <Image
-                            src={activePost.media_url}
-                            alt="Experiment evidence"
-                            className="object-cover"
-                            fill
-                            sizes="(max-width: 768px) 100vw, 768px"
-                          />
-                        </div>
-                      </div>
-                    )}
-                    {activePost.external_link && (
-                      <a
-                        href={activePost.external_link}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-1 text-xs font-semibold text-slate-200 transition hover:border-cyan-400/60 hover:text-cyan-100"
-                      >
-                        {activePost.external_link}
-                      </a>
-                    )}
-                  </section>
-                )}
-
-                {normalizeFeedback(activePost.feedback_needed).length > 0 && (
-                  <section className="space-y-3">
-                    <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
-                      Feedback Requested
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {normalizeFeedback(activePost.feedback_needed).map((tag) => (
-                        <span
-                          key={tag}
-                          className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-100"
-                        >
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  </section>
-                )}
-
-                <div className="border-t border-slate-800 pt-4">
-                  <PostComments
-                    postId={activePost.id}
-                    postOwnerId={activePost.user_id}
-                  />
-                </div>
-              </div>
-            )}
+      <UnifiedDocumentModal
+        open={!!activePostId && !!activePost}
+        post={activePost}
+        statusClassName={
+          activePost ? badgeStyles[activePost.wip_status as WipStatus] ?? badgeStyles.Idea : undefined
+        }
+        onValidate={activePost ? handleToggleValidate : undefined}
+        isValidated={activeIsValidated}
+        validateCount={activePost ? activeValidateCount : undefined}
+        onAddInsight={activePost ? () => openFeedback(activePost.id) : undefined}
+        onClose={closePostModal}
+      />
+      {isLogoutConfirmOpen && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-md rounded-3xl border border-slate-800 bg-slate-950 p-6">
+            <h3 className="text-lg font-semibold text-slate-100">Log out?</h3>
+            <p className="mt-3 text-sm text-slate-300">
+              You will be signed out of your account on this device.
+            </p>
+            <div className="mt-6 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={handleSignOutCancel}
+                disabled={isLoggingOut}
+                className="rounded-full border border-slate-700 px-4 py-2 text-xs font-semibold text-slate-300 transition hover:border-slate-500 hover:text-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleSignOutConfirm()}
+                disabled={isLoggingOut}
+                className="rounded-full border border-rose-500/40 bg-rose-500/10 px-4 py-2 text-xs font-semibold text-rose-100 transition hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isLoggingOut ? "Logging out..." : "Log out"}
+              </button>
+            </div>
           </div>
         </div>
       )}
     </div>
   );
 }
+
