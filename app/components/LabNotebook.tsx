@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
-import { FlaskConical, Paperclip } from "lucide-react";
+import { FlaskConical } from "lucide-react";
 import { useEdit } from "../contexts/EditExperimentContext";
 import UnifiedDocumentModal from "./UnifiedDocumentModal";
 import { useFeedbackSheet } from "../contexts/FeedbackSheetContext";
@@ -66,23 +67,6 @@ export default function LabNotebook({ refreshKey = 0, onPostsLoaded }: Props) {
         if (!mounted) return;
         const u = data.session?.user ?? null;
         setUserId(u?.id ?? null);
-        if (u) {
-          const username =
-            u.user_metadata?.username ||
-            u.user_metadata?.full_name ||
-            u.email?.split("@")[0] ||
-            "Innovator";
-          setAuthors((prev) => ({
-            ...prev,
-            [u.id]: {
-              id: u.id,
-              username,
-              full_name: u.user_metadata?.full_name ?? null,
-              email: u.email ?? null,
-              avatar_url: u.user_metadata?.avatar_url ?? null,
-            },
-          }));
-        }
       } finally {
         if (mounted) setAuthResolved(true);
       }
@@ -156,6 +140,27 @@ export default function LabNotebook({ refreshKey = 0, onPostsLoaded }: Props) {
           problem_title: linkedTitle ?? null,
         };
       });
+      const profileMap: Record<string, Profile> = {};
+      const userIds = Array.from(new Set(rows.map((post) => post.user_id).filter(Boolean)));
+      if (userIds.length) {
+        const { data: profileRows, error: profileError } = await supabase
+          .from("profiles")
+          .select("id, username, avatar_url")
+          .in("id", userIds);
+        if (profileError) {
+          console.error(profileError);
+        } else {
+          ((profileRows as Profile[] | null) ?? []).forEach((profile) => {
+            if (profile.id) {
+              profileMap[profile.id] = {
+                id: profile.id,
+                username: profile.username ?? null,
+                avatar_url: profile.avatar_url ?? null,
+              };
+            }
+          });
+        }
+      }
       setLastFetchCount((prev) => (page === 0 ? rows.length : prev));
       const cc: Record<string, { v: number; s: number }> = {};
       rows.forEach((r) => {
@@ -173,20 +178,7 @@ export default function LabNotebook({ refreshKey = 0, onPostsLoaded }: Props) {
         setLatestCreatedAt(rows[0].created_at ?? null);
       }
       setHasMore(rows.length === 15);
-      const ids = rows.map((r) => r.user_id);
-      if (ids.length) {
-        const { data: profs } = await supabase
-          .from("profiles")
-          .select("id, username, avatar_url")
-          .in("id", Array.from(new Set(ids)));
-        const map: Record<string, Profile> = {};
-        ((profs as Profile[]) ?? []).forEach((p) => {
-           if (p.id) {
-          map[p.id] = p;
-          }
-        });
-        setAuthors((prev) => ({ ...prev, ...map }));
-      }
+      setAuthors((prev) => (page === 0 ? profileMap : { ...prev, ...profileMap }));
       onPostsLoaded?.(nextPosts);
       setLoading(false);
     };
@@ -404,26 +396,13 @@ export default function LabNotebook({ refreshKey = 0, onPostsLoaded }: Props) {
       explore: section3.map((x) => x.post),
     };
   }, [scored, collaboratorIds, validated, mySolutionPosts, items, latestCreatedAt]);
-  const fallbackName = (id?: string) =>
-    id ? `User-${id.slice(0, 6).toUpperCase()}` : "User";
-  const getDisplayName = (p?: Profile, id?: string) =>
-    p?.username || fallbackName(id);
-  const normalizeFeedback = (value?: string[] | string | null) => {
-    if (!value) return [];
-    if (Array.isArray(value)) {
-      return value.map((item) => String(item)).filter(Boolean);
-    }
-    try {
-      const parsed = JSON.parse(value);
-      if (Array.isArray(parsed)) {
-        return parsed.map((item) => String(item)).filter(Boolean);
-      }
-    } catch {
-      return [value];
-    }
-    return [value];
-  };
-  
+  const getInitials = (name: string) =>
+    name
+      .split(" ")
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase())
+      .join("") || "IN";
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -462,74 +441,68 @@ export default function LabNotebook({ refreshKey = 0, onPostsLoaded }: Props) {
 
 
   const renderFeedCard = (post: Post) => {
-    const p = authors[post.user_id];
-    const displayName = getDisplayName(p, post.user_id);
-    const approach = post.approach ?? post.explanation;
-    const feedbackList = normalizeFeedback(post.feedback_needed);
-    const hasMedia = !!post.media_url || !!post.external_link;
-    const problemRelation = Array.isArray(post.problems) ? post.problems[0] : post.problems;
-    const problemTitle = problemRelation?.title?.trim();
-    const preview = (
-      post.problem_statement ??
-      post.theory ??
-      approach ??
-      post.observations ??
-      post.reflection ??
-      ""
-    ).trim();
+    const problemPreview = post.problem_statement ?? "No problem statement provided.";
+    const author = authors[post.user_id];
+    const displayName = author?.username?.trim() ?? "";
+    const createdAtText = post.created_at
+      ? new Date(post.created_at).toLocaleString()
+      : "Recently";
     const advancedCount = items.filter((item) => {
       if (item.user_id !== post.user_id) return false;
       const status = (item.wip_status ?? "idea") as WipStatus;
       return status === "prototype" || status === "testing" || status === "completed" || status === "built";
     }).length;
     const isActiveContributor = advancedCount >= 3;
-    const showExpand =
-      !!post.problem_statement ||
-      !!post.theory ||
-      !!approach ||
-      !!post.observations ||
-      !!post.reflection ||
-      hasMedia ||
-      feedbackList.length > 0;
 
     return (
       <article key={post.id} className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="space-y-2">
-            <div className="flex flex-wrap items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setActivePostId(post.id)}
-                className="text-left text-xl font-semibold text-slate-100 transition hover:text-cyan-100"
-              >
-                {post.title ?? "Untitled Experiment"}
-              </button>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex items-start gap-3">
+                {author?.avatar_url ? (
+                  <Image
+                    src={author.avatar_url}
+                    alt={displayName}
+                    width={40}
+                    height={40}
+                    className="h-10 w-10 rounded-full border border-slate-700/70 object-cover"
+                  />
+                ) : (
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-700/70 bg-slate-800 text-xs font-medium text-slate-200">
+                    {getInitials(displayName)}
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <Link
+                    href={`/profile/${post.user_id}`}
+                    className="truncate text-sm font-medium text-cyan-200 transition hover:text-cyan-100 hover:underline"
+                  >
+                    {displayName}
+                  </Link>
+                  <p className="mt-0.5 text-xs text-slate-500">{createdAtText}</p>
+                </div>
+              </div>
               <span
-                className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide ${
+                className={`shrink-0 rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide ${
                   badgeStyles[(post.wip_status ?? "idea") as WipStatus]
                 }`}
               >
                 {badgeLabels[(post.wip_status ?? "idea") as WipStatus]}
               </span>
-              {hasMedia && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-cyan-500/40 bg-cyan-500/10 px-2 py-1 text-[11px] font-semibold text-cyan-100">
-                  <Paperclip className="h-3 w-3" />
-                  Includes Evidence
-                </span>
-              )}
             </div>
-            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
-              <Link href={`/profile/${post.user_id}`} className="text-cyan-200 hover:underline">
-                {displayName}
-              </Link>
-              {isActiveContributor && (
-                <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-100">
-                  Active Contributor
-                </span>
-              )}
-              <span>&middot;</span>
-              <span>{post.created_at ? new Date(post.created_at).toLocaleString() : "Recently"}</span>
-            </div>
+            <button
+              type="button"
+              onClick={() => setActivePostId(post.id)}
+              className="mt-4 text-left text-lg font-semibold text-slate-100 transition hover:text-cyan-100"
+            >
+              {post.title ?? "Untitled Experiment"}
+            </button>
+            {isActiveContributor && (
+              <span className="mt-2 block w-fit rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-100">
+                Active Contributor
+              </span>
+            )}
           </div>
           {userId === post.user_id && (
             <div className="flex items-center gap-2">
@@ -551,26 +524,9 @@ export default function LabNotebook({ refreshKey = 0, onPostsLoaded }: Props) {
           )}
         </div>
         <div className="mt-6 space-y-4">
-          {post.problem_id && post.problems && problemTitle && (
-            <Link
-              href={`/problems?problemId=${post.problem_id}`}
-              className="inline-flex text-xs font-semibold text-amber-200 underline-offset-2 hover:underline"
-            >
-              Solving: {problemTitle}
-            </Link>
-          )}
-          <p className="text-sm text-slate-300 [display:-webkit-box] overflow-hidden [-webkit-box-orient:vertical] [-webkit-line-clamp:4]">
-            {preview || "No preview available."}
+          <p className="text-sm leading-relaxed text-slate-300 whitespace-pre-wrap [word-break:break-word] [display:-webkit-box] overflow-hidden [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">
+            {problemPreview}
           </p>
-          {showExpand && (
-            <button
-              type="button"
-              onClick={() => setActivePostId(post.id)}
-              className="w-fit rounded-full border border-cyan-500/30 px-3 py-1 text-xs font-semibold text-cyan-100 transition hover:bg-cyan-500/10"
-            >
-              View full record
-            </button>
-          )}
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-slate-800 pt-4">
           <button
@@ -611,7 +567,7 @@ export default function LabNotebook({ refreshKey = 0, onPostsLoaded }: Props) {
           Loading lab notes...
         </div>
       ) : (
-        <div className="grid gap-5">
+        <div className="mx-auto grid w-full max-w-[700px] gap-5">
           {newAvailable && (
             <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
               <div className="flex items-center justify-between">

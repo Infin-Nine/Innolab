@@ -7,6 +7,8 @@ import Image from "next/image";
 import { createClient } from "@supabase/supabase-js";
 import CollabButton from "../../components/CollabButton";
 import UnifiedDocumentModal from "../../components/UnifiedDocumentModal";
+import AboutModal from "../../components/AboutModal";
+import AboutSection from "../../components/AboutSection";
 import { useFeedbackSheet } from "../../contexts/FeedbackSheetContext";
 import { ArrowLeft, FlaskConical, Loader2, Trash2 } from "lucide-react";
 
@@ -20,7 +22,6 @@ type Profile = {
   avatar_url?: string | null;
   bio?: string | null;
   skills?: string[] | string | null;
-  research_interest?: string | null;
 };
 
 type Post = {
@@ -103,6 +104,7 @@ export default function ProfilePage() {
   const [activeIsValidated, setActiveIsValidated] = useState(false);
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
   const { open: openFeedback } = useFeedbackSheet();
 
   useEffect(() => {
@@ -146,6 +148,7 @@ export default function ProfilePage() {
   }, [profileId]);
 
   const skills = useMemo(() => formatSkills(profile), [profile]);
+  const aboutText = profile?.bio?.trim() || "This innovator has not added a bio yet.";
 
   const openPostModal = (postId: string) => {
     setActivePostId(postId);
@@ -288,22 +291,11 @@ export default function ProfilePage() {
                     <p className="text-2xl font-semibold text-slate-100">
                       {getDisplayName(profile)}
                     </p>
-                    <p className="text-sm text-slate-400 truncate max-w-[60ch]">
-                      {profile?.bio || "This innovator has not added a bio yet."}
-                    </p>
-                    {profile?.research_interest && (
-                      <div className="mt-3 max-w-[60ch]">
-                        <p className="text-[10px] uppercase tracking-[0.3em] text-slate-500">
-                          Primary Focus Area
-                        </p>
-                        <div className="mt-1 flex flex-wrap gap-2">
-                          <span className="rounded-full border border-slate-700 bg-slate-900/60 px-3 py-1 text-xs text-slate-300 break-words">
-                            {profile.research_interest}
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                    <div className="mt-3 flex flex-wrap gap-2">
+                    <AboutSection
+                      aboutText={aboutText}
+                      onReadMore={() => setIsAboutModalOpen(true)}
+                    />
+                    <div className="mt-2 flex flex-wrap gap-2">
                       {skills.length ? (
                         skills.slice(0, 3).map((skill) => (
                           <span
@@ -415,7 +407,9 @@ export default function ProfilePage() {
                             {post.title ?? "Untitled Experiment"}
                           </p>
                           {post.problem_statement && (
-                            <p className="mt-1 text-slate-300">{desc}</p>
+                            <p className="mt-1 text-slate-300 whitespace-pre-wrap [word-break:break-word]">
+                              {desc}
+                            </p>
                           )}
                           <div className="mt-2 flex flex-wrap items-center gap-2">
                             <span
@@ -461,6 +455,11 @@ export default function ProfilePage() {
         validateCount={activePost ? activeValidateCount : undefined}
         onAddInsight={activePost ? () => openFeedback(activePost.id) : undefined}
         onClose={closePostModal}
+      />
+      <AboutModal
+        open={isAboutModalOpen}
+        onClose={() => setIsAboutModalOpen(false)}
+        aboutText={aboutText}
       />
       {isLogoutConfirmOpen && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 p-4">

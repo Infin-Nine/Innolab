@@ -288,7 +288,9 @@ export default function ResearchTimeline({
                     {post.title ?? "Untitled Experiment"}
                   </p>
                   {post.problem_statement && (
-                    <p className="mt-1 text-slate-300">{desc}</p>
+                    <p className="mt-1 text-slate-300 whitespace-pre-wrap [word-break:break-word]">
+                      {desc}
+                    </p>
                   )}
                   <div
                     className="mt-2 flex flex-wrap items-center gap-2"

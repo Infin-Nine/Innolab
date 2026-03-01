@@ -81,11 +81,11 @@ export default function UnifiedDocumentModal({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-6">
-      <div className="w-full max-w-6xl h-[90vh] bg-[#0B1220] rounded-2xl border border-white/10 shadow-2xl overflow-y-auto">
-        <div className="px-12 py-8">
+      <div className="w-full max-w-[700px] max-h-[90vh] bg-[#0B1220] rounded-2xl border border-white/10 shadow-2xl overflow-y-auto">
+        <div className="px-6 py-6">
           <div className="flex items-start justify-between gap-6">
             <div>
-              <p className="text-xs tracking-[0.3em] text-cyan-400 uppercase">Research Document</p>
+              <p className="text-sm font-medium text-cyan-300">Experiment Log</p>
               <p className="mt-2 text-xl md:text-2xl font-semibold text-white">{post.title ?? "Untitled Experiment"}</p>
               <div className="mt-5 flex flex-wrap items-center gap-3 text-sm text-slate-400">
                 {post.wip_status && (
@@ -110,39 +110,41 @@ export default function UnifiedDocumentModal({
             </button>
           </div>
         </div>
-        <div className="px-14 pb-10">
-          <div className="max-w-4xl text-[17px] leading-relaxed text-slate-300 space-y-6">
+        <div className="px-6 pb-8">
+          <div className="mx-auto max-w-[700px] text-[16px] leading-[1.7] text-slate-300 space-y-8">
             <section className="space-y-2">
-              <p className="text-xs tracking-[0.3em] text-cyan-400 uppercase">What is being explored</p>
-              <p className="text-slate-200">{bodyText}</p>
+              <p className="text-sm font-medium text-slate-400">Problem</p>
+              <p className="text-slate-200 whitespace-pre-wrap [word-break:break-word]">{bodyText}</p>
             </section>
             {post.theory && (
               <section className="space-y-2">
-                <p className="text-xs tracking-[0.3em] text-cyan-400 uppercase">Core Idea</p>
-                <p className="text-slate-200">{post.theory}</p>
+                <p className="text-sm font-medium text-slate-400">Context</p>
+                <p className="text-slate-200 whitespace-pre-wrap [word-break:break-word]">{post.theory}</p>
               </section>
             )}
             {(post.approach ?? post.explanation) && (
               <section className="space-y-2">
-                <p className="text-xs tracking-[0.3em] text-cyan-400 uppercase">Approach</p>
-                <p className="text-slate-200">{post.approach ?? post.explanation}</p>
+                <p className="text-sm font-medium text-slate-400">My Approach</p>
+                <p className="text-slate-200 whitespace-pre-wrap [word-break:break-word]">
+                  {post.approach ?? post.explanation}
+                </p>
               </section>
             )}
             {post.observations && (
               <section className="space-y-2">
-                <p className="text-xs tracking-[0.3em] text-cyan-400 uppercase">Observations</p>
-                <p className="text-slate-200">{post.observations}</p>
+                <p className="text-sm font-medium text-slate-400">Progress</p>
+                <p className="text-slate-200 whitespace-pre-wrap [word-break:break-word]">{post.observations}</p>
               </section>
             )}
             {post.reflection && (
               <section className="space-y-2">
-                <p className="text-xs tracking-[0.3em] text-cyan-400 uppercase">Reflection</p>
-                <p className="text-slate-200">{post.reflection}</p>
+                <p className="text-sm font-medium text-slate-400">Notes</p>
+                <p className="text-slate-200 whitespace-pre-wrap [word-break:break-word]">{post.reflection}</p>
               </section>
             )}
             {(post.media_url || post.external_link) && (
               <section className="space-y-3">
-                <p className="text-xs tracking-[0.3em] text-cyan-400 uppercase">Evidence</p>
+                <p className="text-sm font-medium text-slate-400">Evidence</p>
                 {post.media_url && (
                   <div className="overflow-hidden rounded-2xl border border-slate-800">
                     <div className="relative aspect-[16/9] max-h-96 w-full">
@@ -170,7 +172,7 @@ export default function UnifiedDocumentModal({
             )}
             {normalizeFeedback(post.feedback_needed).length > 0 && (
               <section className="space-y-3">
-                <p className="text-xs tracking-[0.3em] text-cyan-400 uppercase">Feedback Requested</p>
+                <p className="text-sm font-medium text-slate-400">Need Feedback</p>
                 <div className="flex flex-wrap gap-2">
                   {normalizeFeedback(post.feedback_needed).map((tag) => (
                     <span

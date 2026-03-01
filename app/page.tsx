@@ -1,11 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+} from "react";
 import Image from "next/image";
 import ResearchTimeline from "./components/ResearchTimeline";
 import Link from "next/link";
 import CreatePost from "./components/CreatePost";
 import LabNotebook from "./components/LabNotebook";
+import AboutModal from "./components/AboutModal";
+import AboutSection from "./components/AboutSection";
 import { supabase } from "./lib/supabaseClient";
 import type { Post } from "./types/models";
 import {
@@ -32,7 +40,6 @@ type Profile = {
   bio?: string | null;
   skills?: string[] | string | null;
   badges?: string[] | string | null;
-  research_interest?: string | null;
 };
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
@@ -66,7 +73,7 @@ export default function Home() {
   const [profileUsername, setProfileUsername] = useState("");
   const [profileBio, setProfileBio] = useState("");
   const [profileSkills, setProfileSkills] = useState("");
-  const [profileResearchInterest, setProfileResearchInterest] = useState("");
+  const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
 
   const envMissing = !supabaseUrl || !supabaseAnonKey;
 
@@ -89,7 +96,6 @@ export default function Home() {
         setProfileUsername("");
         setProfileBio("");
         setProfileSkills("");
-        setProfileResearchInterest("");
       }
     });
     return () => {
@@ -120,7 +126,6 @@ export default function Home() {
         setProfileData(data as Profile);
         setProfileUsername(data.username ?? "");
         setProfileBio(data.bio ?? "");
-        setProfileResearchInterest(data.research_interest ?? "");
         if (Array.isArray(data.skills)) {
           setProfileSkills(data.skills.join(", "));
         } else {
@@ -209,7 +214,6 @@ export default function Home() {
         username: profileUsername.trim(),
         bio: profileBio.trim(),
         skills,
-        research_interest: profileResearchInterest.trim() || null,
       })
       .eq("id", userId);
     if (error) {
@@ -221,7 +225,6 @@ export default function Home() {
       username: profileUsername.trim(),
       bio: profileBio.trim(),
       skills,
-      research_interest: profileResearchInterest.trim() || null,
     }));
     setIsEditProfileOpen(false);
   };
@@ -257,16 +260,17 @@ export default function Home() {
   };
 
   const getDisplayName = (profile?: Profile | null) =>
-    profile?.username ||
-    profile?.full_name ||
-    profile?.email ||
-    "Innovator";
+    profile?.username?.trim() ||
+    profile?.full_name?.trim() ||
+    "Unnamed Innovator";
 
   const getInitials = (name: string) => {
     const parts = name.split(" ").filter(Boolean);
     const initials = parts.slice(0, 2).map((part) => part[0]?.toUpperCase());
     return initials.join("") || "IN";
   };
+
+  const aboutText = profileData?.bio?.trim() || "Work description not added yet.";
 
   if (!session) {
     return (
@@ -794,27 +798,14 @@ export default function Home() {
                         )}
                         <div>
                           <p className="text-xl font-semibold text-slate-100">
-                            {getDisplayName(profileData) ||
-                              session.user.email}
+                            {getDisplayName(profileData)}
                           </p>
-                          <p className="text-sm text-slate-400 truncate max-w-[52ch]">
-                            {profileData?.bio ||
-                              "Share your research focus and background."}
-                          </p>
-                          {profileData?.research_interest && (
-                            <div className="mt-3 max-w-[52ch]">
-                              <p className="text-[10px] uppercase tracking-[0.3em] text-slate-500">
-                                Primary Focus Area
-                              </p>
-                              <div className="mt-1 flex flex-wrap gap-2">
-                                <span className="rounded-full border border-slate-700 bg-slate-900/60 px-3 py-1 text-xs text-slate-300 break-words">
-                                  {profileData.research_interest}
-                                </span>
-                              </div>
-                            </div>
-                          )}
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            {profileData &&
+                          <AboutSection
+                            aboutText={aboutText}
+                            onReadMore={() => setIsAboutModalOpen(true)}
+                          />
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {profileData && formatSkills(profileData).length ? (
                               formatSkills(profileData)
                                 .slice(0, 3)
                                 .map((skill) => (
@@ -824,7 +815,12 @@ export default function Home() {
                                   >
                                     {skill}
                                   </span>
-                                ))}
+                                ))
+                            ) : (
+                              <span className="text-xs text-slate-500">
+                                Role not specified.
+                              </span>
+                            )}
                           </div>
                           <div className="mt-3 text-xs text-slate-500">
                             <p>
@@ -944,22 +940,6 @@ export default function Home() {
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-xs text-slate-400">
-                  Primary Interest (optional)
-                </label>
-                <p className="text-xs text-slate-500">
-                  Examples: machine learning, behavioral science, renewable energy, distributed systems
-                </p>
-                <input
-                  value={profileResearchInterest}
-                  onChange={(event) =>
-                    setProfileResearchInterest(event.target.value)
-                  }
-                  className="w-full rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
-                  placeholder="Topics or fields you are currently exploring."
-                />
-              </div>
-              <div className="space-y-1">
                 <label className="text-xs text-slate-400">Areas of Work</label>
                 <input
                   value={profileSkills}
@@ -994,6 +974,11 @@ export default function Home() {
           </div>
         </div>
       )}
+      <AboutModal
+        open={isAboutModalOpen}
+        onClose={() => setIsAboutModalOpen(false)}
+        aboutText={aboutText}
+      />
       {isLogoutConfirmOpen && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-4">
           <div className="w-full max-w-md rounded-3xl border border-slate-800 bg-slate-950 p-6">
