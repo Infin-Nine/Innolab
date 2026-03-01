@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { Pencil, Trash2 } from "lucide-react";
+import { Loader2, Pencil, Trash2 } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useFeedbackSheet } from "../contexts/FeedbackSheetContext";
 import type { Profile, Solution } from "../types/models";
@@ -12,6 +12,7 @@ type Props = {
   postOwnerId?: string;
   compactSpacing?: boolean;
   showInlineAddButton?: boolean;
+  useInlineComposer?: boolean;
 };
 
 const parseType = (content: string) => {
@@ -27,13 +28,25 @@ export default function PostComments({
   postOwnerId,
   compactSpacing = false,
   showInlineAddButton = true,
+  useInlineComposer = false,
 }: Props) {
   const [items, setItems] = useState<Solution[]>([]);
   const [authors, setAuthors] = useState<Record<string, Profile>>({});
   const [loading, setLoading] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [composeOpen, setComposeOpen] = useState(false);
+  const [composeType, setComposeType] = useState("Suggest Improvement");
+  const [composeText, setComposeText] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const { open } = useFeedbackSheet();
+  const insightTypes = [
+    "Suggest Improvement",
+    "Identify Flaw",
+    "Provide Resource",
+    "Validate Approach",
+    "Offer Collaboration",
+  ] as const;
 
   const getUsername = (p?: Profile) => p?.username ?? "";
 
@@ -106,7 +119,45 @@ export default function PostComments({
     return () => window.removeEventListener("solutions:inserted", onInserted as EventListener);
   }, [postId, authors]);
 
-  const startCreate = () => open(postId);
+  const startCreate = () => {
+    if (useInlineComposer) {
+      setComposeOpen(true);
+      return;
+    }
+    open(postId);
+  };
+
+  const handleInlineSubmit = async () => {
+    if (!useInlineComposer || !userId || !composeText.trim() || submitting) return;
+    setSubmitting(true);
+    const content = `[${composeType}] ${composeText.trim()}`;
+    const { data, error } = await supabase
+      .from("solutions")
+      .insert({ post_id: postId, user_id: userId, content })
+      .select("id, post_id, user_id, content, created_at")
+      .single();
+    if (error) {
+      setMessage(error.message || "Failed to submit insight.");
+      setSubmitting(false);
+      return;
+    }
+    const row = data as Solution;
+    setItems((prev) => [row, ...prev]);
+    if (!authors[row.user_id]) {
+      const { data: profileRow } = await supabase
+        .from("profiles")
+        .select("id, username")
+        .eq("id", row.user_id)
+        .maybeSingle();
+      if (profileRow) {
+        setAuthors((prev) => ({ ...prev, [row.user_id]: profileRow as Profile }));
+      }
+    }
+    setComposeText("");
+    setComposeType("Suggest Improvement");
+    setComposeOpen(false);
+    setSubmitting(false);
+  };
 
   const startEdit = () => {
     setMessage("Editing is currently inline here. Submit to replace your previous insight.");
@@ -143,6 +194,56 @@ export default function PostComments({
       {message && (
         <div className="mt-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
           {message}
+        </div>
+      )}
+
+      {useInlineComposer && composeOpen && (
+        <div className="mt-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+          <div className="flex flex-wrap gap-2">
+            {insightTypes.map((type) => (
+              <button
+                key={type}
+                type="button"
+                onClick={() => setComposeType(type)}
+                className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                  composeType === type
+                    ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-100"
+                    : "border-slate-700 text-slate-300 hover:border-emerald-400/60 hover:text-emerald-100"
+                }`}
+              >
+                {type}
+              </button>
+            ))}
+          </div>
+          <textarea
+            value={composeText}
+            onChange={(e) => setComposeText(e.target.value)}
+            className="mt-3 min-h-[110px] w-full rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+            placeholder="Share a concise, constructive insight"
+          />
+          <div className="mt-3 flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                if (submitting) return;
+                setComposeOpen(false);
+                setComposeText("");
+                setComposeType("Suggest Improvement");
+              }}
+              className="rounded-full border border-slate-700 px-3 py-1 text-xs font-semibold text-slate-300 transition hover:border-slate-500 hover:text-slate-100"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleInlineSubmit()}
+              disabled={!composeText.trim() || submitting}
+              className="inline-flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {submitting ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+              Submit
+            </button>
+          </div>
         </div>
       )}
 

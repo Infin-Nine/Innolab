@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { FlaskConical } from "lucide-react";
+import { FlaskConical, MoreHorizontal } from "lucide-react";
 import { useEdit } from "../contexts/EditExperimentContext";
 import UnifiedDocumentModal from "./UnifiedDocumentModal";
 import { useFeedbackSheet } from "../contexts/FeedbackSheetContext";
@@ -13,6 +13,7 @@ import type { Post, Profile, WipStatus } from "../types/models";
 type Props = {
   refreshKey?: number;
   onPostsLoaded?: (posts: Post[]) => void;
+  compact?: boolean;
 };
 
 const badgeStyles = {
@@ -37,7 +38,7 @@ const badgeLabels = {
   wip: "Exploring",
 } as const satisfies Record<WipStatus, string>;
 
-export default function LabNotebook({ refreshKey = 0, onPostsLoaded }: Props) {
+export default function LabNotebook({ refreshKey = 0, onPostsLoaded, compact = false }: Props) {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(false);
   const [feedError, setFeedError] = useState<string | null>(null);
@@ -58,6 +59,7 @@ export default function LabNotebook({ refreshKey = 0, onPostsLoaded }: Props) {
   const [latestCreatedAt, setLatestCreatedAt] = useState<string | null>(null);
   const [deleteTargetPostId, setDeleteTargetPostId] = useState<string | null>(null);
   const [deletingPost, setDeletingPost] = useState(false);
+  const [actionMenuPostId, setActionMenuPostId] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -439,6 +441,16 @@ export default function LabNotebook({ refreshKey = 0, onPostsLoaded }: Props) {
     }
   }, []);
 
+  useEffect(() => {
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("[data-owner-menu]")) return;
+      setActionMenuPostId(null);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, []);
+
 
   const renderFeedCard = (post: Post) => {
     const problemPreview = post.problem_statement ?? "No problem statement provided.";
@@ -455,7 +467,10 @@ export default function LabNotebook({ refreshKey = 0, onPostsLoaded }: Props) {
     const isActiveContributor = advancedCount >= 3;
 
     return (
-      <article key={post.id} className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
+      <article
+        key={post.id}
+        className={`rounded-3xl border border-slate-800 bg-slate-900/60 ${compact ? "p-4" : "p-6"}`}
+      >
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
             <div className="flex items-start justify-between gap-3">
@@ -504,39 +519,81 @@ export default function LabNotebook({ refreshKey = 0, onPostsLoaded }: Props) {
               </span>
             )}
           </div>
-          {userId === post.user_id && (
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => openEdit(post.id)}
-                className="rounded-full border border-slate-700 px-3 py-1 text-xs font-semibold text-slate-200 transition hover:border-cyan-400/60 hover:text-cyan-100"
-              >
-                Edit
-              </button>
-              <button
-                type="button"
-                onClick={() => requestDeletePost(post.id)}
-                className="rounded-full border border-rose-500/40 px-3 py-1 text-xs font-semibold text-rose-100 transition hover:border-rose-400/60 hover:text-rose-50"
-              >
-                Delete
-              </button>
-            </div>
-          )}
+          {userId === post.user_id &&
+            (compact ? (
+              <div className="relative" data-owner-menu>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setActionMenuPostId((prev) => (prev === post.id ? null : post.id))
+                  }
+                  className="inline-flex min-h-11 items-center justify-center rounded-full border border-slate-700 px-3 text-slate-200 transition hover:border-cyan-400/60 hover:text-cyan-100"
+                  aria-label="Open post actions"
+                >
+                  <MoreHorizontal className="h-4 w-4" />
+                </button>
+                {actionMenuPostId === post.id && (
+                  <div className="absolute right-0 bottom-full z-[70] mb-2 w-36 rounded-2xl border border-slate-700 bg-slate-950 p-1 shadow-xl">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActionMenuPostId(null);
+                        openEdit(post.id);
+                      }}
+                      className="flex min-h-11 w-full items-center rounded-xl px-3 text-left text-xs font-semibold text-slate-100 transition hover:bg-slate-800"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActionMenuPostId(null);
+                        requestDeletePost(post.id);
+                      }}
+                      className="flex min-h-11 w-full items-center rounded-xl px-3 text-left text-xs font-semibold text-rose-200 transition hover:bg-rose-500/10"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => openEdit(post.id)}
+                  className="rounded-full border border-slate-700 px-3 py-1 text-xs font-semibold text-slate-200 transition hover:border-cyan-400/60 hover:text-cyan-100"
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => requestDeletePost(post.id)}
+                  className="rounded-full border border-rose-500/40 px-3 py-1 text-xs font-semibold text-rose-100 transition hover:border-rose-400/60 hover:text-rose-50"
+                >
+                  Delete
+                </button>
+              </div>
+            ))}
         </div>
-        <div className="mt-6 space-y-4">
+        <div className={`${compact ? "mt-3" : "mt-6"} space-y-4`}>
           <p className="text-sm leading-relaxed text-slate-300 whitespace-pre-wrap [word-break:break-word] [display:-webkit-box] overflow-hidden [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">
             {problemPreview}
           </p>
         </div>
-        <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-slate-800 pt-4">
+        <div
+          className={`mt-4 flex flex-wrap items-center gap-3 border-t border-slate-800 ${
+            compact ? "pt-3" : "pt-4"
+          }`}
+        >
           <button
             type="button"
             onClick={() => toggleValidate(post.id)}
-            className={`flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold transition ${
+            className={`flex items-center gap-2 rounded-full border text-xs font-semibold transition ${
               validated[post.id]
                 ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-100"
                 : "border-slate-700 bg-slate-950/70 text-slate-200 hover:border-emerald-500/40 hover:text-emerald-100"
-            }`}
+            } ${compact ? "min-h-11 px-4" : "px-3 py-1"}`}
           >
             <FlaskConical className="h-4 w-4" />
             Validate
@@ -547,7 +604,9 @@ export default function LabNotebook({ refreshKey = 0, onPostsLoaded }: Props) {
           <button
             type="button"
             onClick={() => openFeedback(post.id)}
-            className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/20"
+            className={`rounded-full border border-emerald-500/40 bg-emerald-500/10 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/20 ${
+              compact ? "min-h-11 px-4" : "px-3 py-1"
+            }`}
           >
             Add Insight
           </button>

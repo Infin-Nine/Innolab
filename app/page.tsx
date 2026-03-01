@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import {
   useCallback,
@@ -9,23 +9,21 @@ import {
 } from "react";
 import Image from "next/image";
 import ResearchTimeline from "./components/ResearchTimeline";
-import Link from "next/link";
 import CreatePost from "./components/CreatePost";
 import LabNotebook from "./components/LabNotebook";
 import AboutModal from "./components/AboutModal";
 import AboutSection from "./components/AboutSection";
+import ResponsiveLayout from "@/components/layout/ResponsiveLayout";
 import { supabase } from "./lib/supabaseClient";
 import type { Post } from "./types/models";
 import {
-  AlertTriangle,
   Atom,
   ImageUp,
-  LayoutGrid,
   Loader2,
   LogIn,
+  MoreHorizontal,
   PencilLine,
   ShieldOff,
-  UserRound,
   Users,
   Zap,
   X,
@@ -63,6 +61,8 @@ export default function Home() {
   const [postsRefreshKey, setPostsRefreshKey] = useState(0);
 
   const [isPostModalOpen, setIsPostModalOpen] = useState(false);
+  const [isFabMenuOpen, setIsFabMenuOpen] = useState(false);
+  const [isMobileProfileMenuOpen, setIsMobileProfileMenuOpen] = useState(false);
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -110,6 +110,7 @@ export default function Home() {
   const handlePostCreated = () => {
     setPostsRefreshKey((prev) => prev + 1);
     setIsPostModalOpen(false);
+    setIsFabMenuOpen(false);
   };
   useEffect(() => {
     if (!userId) {
@@ -271,6 +272,211 @@ export default function Home() {
   };
 
   const aboutText = profileData?.bio?.trim() || "Work description not added yet.";
+  const openNewExperimentModal = () => {
+    if (!userId) return;
+    setIsFabMenuOpen(false);
+    setIsPostModalOpen(true);
+  };
+
+  useEffect(() => {
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("[data-owner-menu]")) return;
+      setIsMobileProfileMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, []);
+
+  const renderFeedSection = (compact: boolean) => (
+    <section className="space-y-4 md:space-y-6">
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-xs uppercase tracking-[0.3em] text-cyan-400">The Lab</p>
+          <h2 className={compact ? "text-xl font-semibold" : "text-2xl font-semibold"}>
+            Document Your Work With Clear Evidence
+          </h2>
+        </div>
+        <button
+          type="button"
+          onClick={openNewExperimentModal}
+          className={`flex items-center gap-2 rounded-full border border-cyan-500/40 bg-cyan-500/10 font-semibold text-cyan-100 transition hover:bg-cyan-500/20 ${
+            compact ? "min-h-11 px-4 text-xs" : "px-4 py-2 text-sm"
+          }`}
+        >
+          <ImageUp className="h-4 w-4" />
+          New Experiment
+        </button>
+      </header>
+      <LabNotebook refreshKey={postsRefreshKey} onPostsLoaded={handlePostsLoaded} compact={compact} />
+    </section>
+  );
+
+  const renderProfileSection = (compact: boolean) => (
+    <section className="space-y-4 md:space-y-6">
+      <header>
+        <p className="text-xs uppercase tracking-[0.3em] text-emerald-400">Profile</p>
+        <h2 className={compact ? "text-xl font-semibold" : "text-2xl font-semibold"}>
+          Your public profile and work history.
+        </h2>
+      </header>
+      {!session ? (
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/60 px-4 py-6 text-sm text-slate-400">
+          Sign in to view your trust ledger.
+        </div>
+      ) : (
+        <div className="space-y-4 md:space-y-6">
+          <div
+            className={
+              compact
+                ? "border-b border-white/10 px-4 py-4"
+                : "rounded-3xl border border-slate-800 bg-slate-900/60 p-4 md:p-6"
+            }
+          >
+            <div className={`flex ${compact ? "flex-col" : "flex-wrap"} items-start justify-between gap-4`}>
+              <div className={compact ? "flex items-start gap-3" : "flex items-center gap-4"}>
+                {profileData?.avatar_url ? (
+                  <Image
+                    src={profileData.avatar_url}
+                    alt={getDisplayName(profileData)}
+                    width={72}
+                    height={72}
+                    className="h-16 w-16 rounded-full border border-slate-700/70 object-cover"
+                  />
+                ) : (
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full border border-slate-700/70 bg-slate-800 text-base font-semibold text-slate-200">
+                    {getInitials(getDisplayName(profileData) || session.user.email || "Innovator")}
+                  </div>
+                )}
+                <div>
+                  <p className={compact ? "text-lg font-semibold text-slate-100" : "text-xl font-semibold text-slate-100"}>
+                    {getDisplayName(profileData)}
+                  </p>
+                  <AboutSection aboutText={aboutText} onReadMore={() => setIsAboutModalOpen(true)} />
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {profileData && formatSkills(profileData).length ? (
+                      formatSkills(profileData)
+                        .slice(0, 3)
+                        .map((skill) => (
+                          <span
+                            key={skill}
+                            className="rounded-full border border-slate-700 bg-slate-800/60 px-3 py-1 text-xs text-slate-200"
+                          >
+                            {skill}
+                          </span>
+                        ))
+                    ) : (
+                      <span className="text-xs text-slate-500">Role not specified.</span>
+                    )}
+                  </div>
+                  <div className="mt-3 text-xs text-slate-500">
+                    <p>
+                      Experiments: {userPosts.length === 0 ? "—" : userPosts.length}
+                      {" | "}Joined:{" "}
+                      {session.user.created_at ? new Date(session.user.created_at).getFullYear() : "—"}
+                    </p>
+                    {userPosts.length === 0 && <p className="mt-1">Start your first experiment</p>}
+                  </div>
+                </div>
+              </div>
+              <div className={`flex ${compact ? "w-full flex-wrap items-center" : "items-center"} gap-3`}>
+                <button
+                  type="button"
+                  onClick={openNewExperimentModal}
+                  className={`inline-flex items-center justify-center gap-2 rounded-full border border-cyan-500/50 bg-cyan-500/20 font-semibold text-cyan-100 transition hover:bg-cyan-500/30 hover:border-cyan-400/60 ${
+                    compact ? "h-11 px-4 text-xs" : "px-5 py-2 text-sm"
+                  }`}
+                >
+                  + New Experiment
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setProfileMessage(null);
+                    setIsEditProfileOpen(true);
+                  }}
+                  className={`flex items-center justify-center gap-2 rounded-full border border-slate-700 bg-slate-900 font-semibold text-slate-200 transition hover:border-slate-500 hover:text-slate-100 ${
+                    compact ? "h-11 px-4 text-xs" : "px-4 py-2 text-xs"
+                  }`}
+                >
+                  <PencilLine className="h-4 w-4" />
+                  Edit Profile
+                </button>
+                {compact ? (
+                  <div className="relative ml-auto" data-owner-menu>
+                    <button
+                      type="button"
+                      onClick={() => setIsMobileProfileMenuOpen((prev) => !prev)}
+                      className="inline-flex h-11 items-center justify-center rounded-full border border-slate-700 bg-slate-900 px-3 text-slate-200 transition hover:border-slate-500 hover:text-slate-100"
+                      aria-label="Open profile actions"
+                    >
+                      <MoreHorizontal className="h-4 w-4" />
+                    </button>
+                    {isMobileProfileMenuOpen && (
+                      <div className="absolute right-0 z-50 mt-2 w-36 rounded-2xl border border-slate-700 bg-slate-950 p-1 shadow-xl">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsMobileProfileMenuOpen(false);
+                            handleSignOutRequest();
+                          }}
+                          className="flex h-11 w-full items-center rounded-xl px-3 text-left text-xs font-semibold text-rose-200 transition hover:bg-rose-500/10"
+                        >
+                          Log out
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleSignOutRequest}
+                    className="flex items-center justify-center gap-2 rounded-full border border-rose-500/40 bg-rose-500/10 px-4 py-2 text-xs font-semibold text-rose-100 transition hover:bg-rose-500/20"
+                  >
+                    Log out
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className={compact ? "mt-4" : "mt-6 border-t border-slate-800 pt-4"} />
+          </div>
+          <div className={compact ? "mt-6 border-t border-white/10 pt-6" : "rounded-3xl border border-slate-800 bg-slate-900/60 p-4 md:p-6"}>
+            <h2 className="text-lg font-semibold">Work Timeline</h2>
+            <div className={compact ? "mt-3" : "mt-4"}>
+              <ResearchTimeline
+                userId={userId ?? ""}
+                currentUserId={userId}
+                initialPosts={userPosts.length > 0 ? userPosts : undefined}
+                showAuthor={false}
+                compact={compact}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+  const desktopMainContent = (
+    <>
+      {envMissing && (
+        <div className="mb-6 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+          Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to enable live data.
+        </div>
+      )}
+      {activeTab === "feed" ? renderFeedSection(false) : renderProfileSection(false)}
+    </>
+  );
+
+  const mobileMainContent = (
+    <>
+      {envMissing && (
+        <div className="mb-4 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+          Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to enable live data.
+        </div>
+      )}
+      {activeTab === "feed" ? renderFeedSection(true) : renderProfileSection(true)}
+    </>
+  );
 
   if (!session) {
     return (
@@ -537,360 +743,17 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#0f172a,_#020617_55%)] text-slate-100">
-      <div className="mx-auto flex min-h-screen max-w-7xl flex-col md:flex-row">
-        <aside className="flex w-full flex-col border-b border-slate-800 bg-slate-950/80 px-6 py-6 md:min-h-screen md:w-72 md:border-b-0 md:border-r">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan-500/30 bg-cyan-500/10 text-cyan-200">
-              <Atom className="h-6 w-6" />
-            </div>
-            <div>
-              <p className="text-lg font-semibold">InnoLab</p>
-              <p className="text-xs text-slate-400">Open Research & Innovation Network</p>
-            </div>
-          </div>
-          <nav className="mt-8 space-y-2">
-            <button
-              type="button"
-              onClick={() => setActiveTab("feed")}
-              className={`flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left text-sm font-semibold transition ${
-                activeTab === "feed"
-                  ? "border-cyan-400/70 bg-cyan-500/10 text-cyan-100"
-                  : "border-transparent bg-slate-900/40 text-slate-300 hover:border-slate-700 hover:text-slate-100"
-              }`}
-            >
-              <LayoutGrid className="h-4 w-4" />
-              Lab
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("profile")}
-              className={`flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left text-sm font-semibold transition ${
-                activeTab === "profile"
-                  ? "border-cyan-400/70 bg-cyan-500/10 text-cyan-100"
-                  : "border-transparent bg-slate-900/40 text-slate-300 hover:border-slate-700 hover:text-slate-100"
-              }`}
-            >
-              <UserRound className="h-4 w-4" />
-              Profile
-            </button>
-            <Link
-              href="/collaborators"
-              className="flex w-full items-center gap-3 rounded-xl border border-transparent bg-slate-900/40 px-4 py-3 text-left text-sm font-semibold text-slate-300 transition hover:border-cyan-400/70 hover:text-cyan-100"
-            >
-              <Users className="h-4 w-4" />
-              Collaborations
-            </Link>
-            <Link
-              href="/problems"
-              className="flex w-full items-center gap-3 rounded-xl border border-transparent bg-slate-900/40 px-4 py-3 text-left text-sm font-semibold text-slate-300 transition hover:border-cyan-400/70 hover:text-cyan-100"
-            >
-              <AlertTriangle className="h-4 w-4" />
-              Problem Space
-            </Link>
-          </nav>
-          <div className="mt-8 rounded-2xl border border-slate-800 bg-slate-900/60 p-4 text-xs text-slate-400">
-            <p className="font-semibold text-slate-200">System Status</p>
-            <p>Secure lab channels online.</p>
-          </div>
-          <div className="mt-auto space-y-3 border-t border-slate-800 pt-6">
-            {!session && (
-              <button
-                type="button"
-                onClick={() => setActiveTab("feed")}
-                className="flex w-full items-center justify-center gap-2 rounded-full border border-cyan-400/60 bg-cyan-500/10 py-2 text-sm text-cyan-100 transition hover:bg-cyan-500/20"
-              >
-                <LogIn className="h-4 w-4" />
-                Open Auth Console
-              </button>
-            )}
-          </div>
-        </aside>
-
-        <main className="flex-1 px-6 py-8 md:px-10">
-          {envMissing && (
-            <div className="mb-6 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
-              Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to
-              enable live data.
-            </div>
-          )}
-
-          {!session && (
-            <section className="mb-8 grid gap-6 rounded-3xl border border-slate-800 bg-slate-950/70 p-6 lg:grid-cols-[1.2fr_1fr]">
-              <div className="space-y-4">
-                <p className="text-xs uppercase tracking-[0.3em] text-cyan-400">
-                  Auth Console
-                </p>
-                <h1 className="text-3xl font-semibold">
-                  Build, share, and protect your innovations.
-                </h1>
-                <p className="text-sm text-slate-400">
-                  Create lab notes, connect with collaborators, and track your
-                  trust ledger with a single account.
-                </p>
-                <div className="flex flex-wrap gap-3 text-xs text-slate-400">
-                  <span className="rounded-full border border-cyan-500/30 px-3 py-1">
-                    Supabase Auth
-                  </span>
-                  <span className="rounded-full border border-fuchsia-500/30 px-3 py-1">
-                    Encrypted Logs
-                  </span>
-                  <span className="rounded-full border border-emerald-500/30 px-3 py-1">
-                    Trusted Ledger
-                  </span>
-                </div>
-              </div>
-              <form
-                onSubmit={handleAuthSubmit}
-                className="space-y-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-5"
-              >
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setAuthMode("login")}
-                    className={`flex-1 rounded-full px-3 py-2 text-xs font-semibold transition ${
-                      authMode === "login"
-                        ? "bg-cyan-500/20 text-cyan-100"
-                        : "bg-slate-900 text-slate-400 hover:text-slate-200"
-                    }`}
-                  >
-                    Log In
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setAuthMode("signup")}
-                    className={`flex-1 rounded-full px-3 py-2 text-xs font-semibold transition ${
-                      authMode === "signup"
-                        ? "bg-fuchsia-500/20 text-fuchsia-100"
-                        : "bg-slate-900 text-slate-400 hover:text-slate-200"
-                    }`}
-                  >
-                    Sign Up
-                  </button>
-                </div>
-                {authMode === "signup" && (
-                  <div className="space-y-1">
-                    <label className="text-xs text-slate-400">Display name</label>
-                    <input
-                      value={authName}
-                      onChange={(event) => setAuthName(event.target.value)}
-                      className="w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
-                      placeholder="Nova Innovator"
-                      type="text"
-                    />
-                  </div>
-                )}
-                <div className="space-y-1">
-                  <label className="text-xs text-slate-400">Email</label>
-                  <input
-                    value={authEmail}
-                    onChange={(event) => setAuthEmail(event.target.value)}
-                    className="w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
-                    placeholder="you@lab.com"
-                    type="email"
-                    required
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs text-slate-400">Password</label>
-                  <input
-                    value={authPassword}
-                    onChange={(event) => setAuthPassword(event.target.value)}
-                    className="w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
-                    placeholder="••••••••"
-                    type="password"
-                    required
-                  />
-                </div>
-                {authMessage && (
-                  <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-3 py-2 text-xs text-cyan-100">
-                    {authMessage}
-                  </div>
-                )}
-                <button
-                  type="submit"
-                  disabled={authLoading || envMissing}
-                  className="flex w-full items-center justify-center gap-2 rounded-full border border-cyan-500/40 bg-cyan-500/20 py-2 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-500/30 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {authLoading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Processing...
-                    </>
-                  ) : (
-                    <>
-                      <LogIn className="h-4 w-4" />
-                      {authMode === "login" ? "Log In" : "Create Account"}
-                    </>
-                  )}
-                </button>
-              </form>
-            </section>
-          )}
-
-          {activeTab === "feed" && (
-            <section className="space-y-6">
-              <header className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.3em] text-cyan-400">
-                    The Lab
-                  </p>
-                  <h2 className="text-2xl font-semibold">
-                    Document Your Work With Clear Evidence
-                  </h2>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!userId) {
-                      return;
-                    }
-                    setIsPostModalOpen(true);
-                  }}
-                  className="flex items-center gap-2 rounded-full border border-cyan-500/40 bg-cyan-500/10 px-4 py-2 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-500/20"
-                >
-                  <ImageUp className="h-4 w-4" />
-                  New Experiment
-                </button>
-              </header>
-              <LabNotebook
-                refreshKey={postsRefreshKey}
-                onPostsLoaded={handlePostsLoaded}
-              />
-            </section>
-          )}
-
-
-          {activeTab === "profile" && (
-            <section className="space-y-6">
-              <header>
-                <p className="text-xs uppercase tracking-[0.3em] text-emerald-400">
-                  Profile
-                </p>
-                <h2 className="text-2xl font-semibold">
-                  Your public profile and work history.
-                </h2>
-              </header>
-              {!session ? (
-                <div className="rounded-2xl border border-slate-800 bg-slate-900/60 px-4 py-6 text-sm text-slate-400">
-                  Sign in to view your trust ledger.
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
-                    <div className="flex flex-wrap items-center justify-between gap-4">
-                      <div className="flex items-center gap-4">
-                        {profileData?.avatar_url ? (
-                          <Image
-                            src={profileData.avatar_url}
-                            alt={getDisplayName(profileData)}
-                            width={72}
-                            height={72}
-                            className="h-16 w-16 rounded-full border border-slate-700/70 object-cover"
-                          />
-                        ) : (
-                          <div className="flex h-16 w-16 items-center justify-center rounded-full border border-slate-700/70 bg-slate-800 text-base font-semibold text-slate-200">
-                            {getInitials(
-                              getDisplayName(profileData) ||
-                                session.user.email ||
-                                "Innovator"
-                            )}
-                          </div>
-                        )}
-                        <div>
-                          <p className="text-xl font-semibold text-slate-100">
-                            {getDisplayName(profileData)}
-                          </p>
-                          <AboutSection
-                            aboutText={aboutText}
-                            onReadMore={() => setIsAboutModalOpen(true)}
-                          />
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            {profileData && formatSkills(profileData).length ? (
-                              formatSkills(profileData)
-                                .slice(0, 3)
-                                .map((skill) => (
-                                  <span
-                                    key={skill}
-                                    className="rounded-full border border-slate-700 bg-slate-800/60 px-3 py-1 text-xs text-slate-200"
-                                  >
-                                    {skill}
-                                  </span>
-                                ))
-                            ) : (
-                              <span className="text-xs text-slate-500">
-                                Role not specified.
-                              </span>
-                            )}
-                          </div>
-                          <div className="mt-3 text-xs text-slate-500">
-                            <p>
-                              Experiments:{" "}
-                              {userPosts.length === 0 ? "—" : userPosts.length}
-                              {" | "}Joined:{" "}
-                              {session.user.created_at
-                                ? new Date(
-                                    session.user.created_at
-                                  ).getFullYear()
-                                : "—"}
-                            </p>
-                            {userPosts.length === 0 && (
-                              <p className="mt-1">
-                                Start your first experiment
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsPostModalOpen(true);
-                          }}
-                          className="inline-flex items-center gap-2 rounded-full border border-cyan-500/50 bg-cyan-500/20 px-5 py-2 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-500/30 hover:border-cyan-400/60"
-                        >
-                          + New Experiment
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setProfileMessage(null);
-                            setIsEditProfileOpen(true);
-                          }}
-                          className="flex items-center gap-2 rounded-full border border-slate-700 bg-slate-900 px-4 py-2 text-xs font-semibold text-slate-200 transition hover:border-slate-500 hover:text-slate-100"
-                        >
-                          <PencilLine className="h-4 w-4" />
-                          Edit Profile
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleSignOutRequest}
-                          className="flex items-center gap-2 rounded-full border border-rose-500/40 bg-rose-500/10 px-4 py-2 text-xs font-semibold text-rose-100 transition hover:bg-rose-500/20"
-                        >
-                          Log out
-                        </button>
-                      </div>
-                    </div>
-                    <div className="mt-6 border-t border-slate-800 pt-4" />
-                  </div>
-                  <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
-                    <h2 className="text-lg font-semibold">Work Timeline</h2>
-                    <div className="mt-4">
-                      <ResearchTimeline
-                        userId={userId ?? ""}
-                        currentUserId={userId}
-                        initialPosts={userPosts}
-                        showAuthor={false}
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-            </section>
-          )}
-        </main>
-      </div>
-
+      <ResponsiveLayout
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        hasSession={!!session}
+        onOpenAuthConsole={() => setActiveTab("feed")}
+        fabMenuOpen={isFabMenuOpen}
+        onFabOpen={() => setIsFabMenuOpen(true)}
+        onFabClose={() => setIsFabMenuOpen(false)}
+        desktopChildren={desktopMainContent}
+        mobileChildren={mobileMainContent}
+      />
       <CreatePost
         isOpen={isPostModalOpen}
         onClose={() => setIsPostModalOpen(false)}
@@ -899,7 +762,7 @@ export default function Home() {
 
       {isEditProfileOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="flex w-full max-w-lg max-h-[85vh] flex-col overflow-hidden rounded-3xl border border-slate-800 bg-slate-950 p-6">
+          <div className="flex w-full max-w-lg max-h-[90vh] flex-col overflow-y-auto rounded-3xl border border-slate-800 bg-slate-950 p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs uppercase tracking-[0.3em] text-emerald-400">
@@ -1010,4 +873,7 @@ export default function Home() {
     </div>
   );
 }
+
+
+
 

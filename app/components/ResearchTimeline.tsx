@@ -1,7 +1,8 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
+import { MoreHorizontal } from "lucide-react";
 import { useEdit } from "../contexts/EditExperimentContext";
 import UnifiedDocumentModal from "./UnifiedDocumentModal";
 import { useFeedbackSheet } from "../contexts/FeedbackSheetContext";
@@ -40,6 +41,7 @@ type Props = {
   showAuthor?: boolean;
   authorName?: string | null;
   onCountChange?: (n: number) => void;
+  compact?: boolean;
 };
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
@@ -75,6 +77,7 @@ export default function ResearchTimeline({
   showAuthor = false,
   authorName,
   onCountChange,
+  compact = false,
 }: Props) {
   const [posts, setPosts] = useState<Post[]>(initialPosts ?? []);
   const [loading, setLoading] = useState(!initialPosts);
@@ -83,6 +86,7 @@ export default function ResearchTimeline({
   const [activeIsValidated, setActiveIsValidated] = useState(false);
   const [deleteTargetPostId, setDeleteTargetPostId] = useState<string | null>(null);
   const [deletingPost, setDeletingPost] = useState(false);
+  const [actionMenuPostId, setActionMenuPostId] = useState<string | null>(null);
   const { openEdit } = useEdit();
   const { open: openFeedback } = useFeedbackSheet();
   const isOwner = (post: Post) => currentUserId === post.user_id;
@@ -168,6 +172,16 @@ export default function ResearchTimeline({
     }
   }, []);
 
+  useEffect(() => {
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("[data-owner-menu]")) return;
+      setActionMenuPostId(null);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, []);
+
   const openEditGlobal = (post: Post) => {
     setActivePostId(null);
     openEdit(post.id);
@@ -241,7 +255,7 @@ export default function ResearchTimeline({
   const items = useMemo(() => posts, [posts]);
   const activePost = items.find((p) => p.id === activePostId) ?? null;
   const excerpt = (value: string, limit: number) =>
-    value.length > limit ? `${value.slice(0, limit)}…` : value;
+    value.length > limit ? `${value.slice(0, limit)}...` : value;
 
   if (loading) {
     return (
@@ -273,7 +287,9 @@ export default function ResearchTimeline({
             return (
               <div
                 key={post.id}
-                className="grid grid-cols-[120px_1fr] items-start gap-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-4"
+                className={`items-start gap-4 rounded-2xl border border-slate-800 bg-slate-950/70 ${
+                  compact ? "flex flex-col p-4" : "grid grid-cols-[120px_1fr] p-4"
+                }`}
                 role="button"
                 tabIndex={0}
                 onClick={() => openModal(post)}
@@ -283,7 +299,7 @@ export default function ResearchTimeline({
                 style={{ cursor: "pointer" }}
               >
                 <div className="text-xs text-slate-400">{dateText}</div>
-                <div className="text-sm text-slate-200">
+                <div className="w-full text-sm text-slate-200">
                   <p className="font-semibold text-slate-100">
                     {post.title ?? "Untitled Experiment"}
                   </p>
@@ -306,30 +322,71 @@ export default function ResearchTimeline({
                     {showAuthor && authorName && (
                       <span className="text-xs text-slate-400">by {authorName}</span>
                     )}
-                    {currentUserId === post.user_id && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openEditGlobal(post);
-                          }}
-                          className="rounded-full border border-cyan-500/40 bg-cyan-500/10 px-3 py-1 text-xs font-semibold text-cyan-100 transition hover:bg-cyan-500/20"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            requestDeletePost(post.id);
-                          }}
-                          className="rounded-full border border-rose-500/40 bg-rose-500/10 px-3 py-1 text-xs font-semibold text-rose-100 transition hover:bg-rose-500/20"
-                        >
-                          Delete
-                        </button>
-                      </>
-                    )}
+                    {currentUserId === post.user_id &&
+                      (compact ? (
+                        <div className="relative ml-auto" data-owner-menu>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActionMenuPostId((prev) => (prev === post.id ? null : post.id));
+                            }}
+                            className="inline-flex min-h-11 items-center justify-center rounded-full border border-slate-700 px-3 text-slate-200 transition hover:border-cyan-400/60 hover:text-cyan-100"
+                            aria-label="Open post actions"
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                          </button>
+                          {actionMenuPostId === post.id && (
+                            <div className="absolute right-0 bottom-full z-[70] mb-2 w-36 rounded-2xl border border-slate-700 bg-slate-950 p-1 shadow-xl">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActionMenuPostId(null);
+                                  openEditGlobal(post);
+                                }}
+                                className="flex min-h-11 w-full items-center rounded-xl px-3 text-left text-xs font-semibold text-slate-100 transition hover:bg-slate-800"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActionMenuPostId(null);
+                                  requestDeletePost(post.id);
+                                }}
+                                className="flex min-h-11 w-full items-center rounded-xl px-3 text-left text-xs font-semibold text-rose-200 transition hover:bg-rose-500/10"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openEditGlobal(post);
+                            }}
+                            className="rounded-full border border-cyan-500/40 bg-cyan-500/10 px-3 py-1 text-xs font-semibold text-cyan-100 transition hover:bg-cyan-500/20"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              requestDeletePost(post.id);
+                            }}
+                            className="rounded-full border border-rose-500/40 bg-rose-500/10 px-3 py-1 text-xs font-semibold text-rose-100 transition hover:bg-rose-500/20"
+                          >
+                            Delete
+                          </button>
+                        </>
+                      ))}
                   </div>
                 </div>
               </div>
@@ -383,4 +440,5 @@ export default function ResearchTimeline({
     </>
   );
 }
+
 
