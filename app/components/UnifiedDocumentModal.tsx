@@ -5,6 +5,7 @@ import Image from "next/image";
 import PostComments from "./PostComments";
 import { FlaskConical, Loader2, X } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
+import { useLoginModal } from "../contexts/LoginModalContext";
 
 type ModalPost = {
   id: string;
@@ -73,6 +74,7 @@ export default function UnifiedDocumentModal({
   const [insightSubmitting, setInsightSubmitting] = useState(false);
   const [insightError, setInsightError] = useState<string | null>(null);
   const [insightUserId, setInsightUserId] = useState<string | null>(null);
+  const { openLoginModal } = useLoginModal();
   const insightTypes = [
     "Suggest Improvement",
     "Identify Flaw",
@@ -98,13 +100,25 @@ export default function UnifiedDocumentModal({
   if (!open || !post) return null;
 
   const submitInsight = async () => {
-    if (!insightUserId || !insightText.trim() || insightSubmitting) return;
+    let currentUserId = insightUserId;
+    if (!currentUserId) {
+      const { data } = await supabase.auth.getUser();
+      currentUserId = data.user?.id ?? null;
+      if (currentUserId) {
+        setInsightUserId(currentUserId);
+      }
+    }
+    if (!currentUserId) {
+      openLoginModal(() => void submitInsight());
+      return;
+    }
+    if (!insightText.trim() || insightSubmitting) return;
     setInsightSubmitting(true);
     setInsightError(null);
     const content = `[${insightType}] ${insightText.trim()}`;
     const { data, error } = await supabase
       .from("solutions")
-      .insert({ post_id: post.id, user_id: insightUserId, content })
+      .insert({ post_id: post.id, user_id: currentUserId, content })
       .select("id, post_id, user_id, content, created_at")
       .single();
     if (error) {
@@ -248,6 +262,13 @@ export default function UnifiedDocumentModal({
                 <button
                   type="button"
                   onClick={() => {
+                    if (!insightUserId) {
+                      openLoginModal(() => {
+                        setInsightError(null);
+                        setInsightOpen(true);
+                      });
+                      return;
+                    }
                     setInsightError(null);
                     setInsightOpen(true);
                   }}

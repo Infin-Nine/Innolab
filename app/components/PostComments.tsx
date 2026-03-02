@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Loader2, Pencil, Trash2 } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useFeedbackSheet } from "../contexts/FeedbackSheetContext";
+import { useLoginModal } from "../contexts/LoginModalContext";
 import type { Profile, Solution } from "../types/models";
 
 type Props = {
@@ -40,6 +41,7 @@ export default function PostComments({
   const [composeText, setComposeText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const { open } = useFeedbackSheet();
+  const { openLoginModal } = useLoginModal();
   const insightTypes = [
     "Suggest Improvement",
     "Identify Flaw",
@@ -54,6 +56,12 @@ export default function PostComments({
     supabase.auth.getUser().then(({ data }) => {
       setUserId(data.user?.id ?? null);
     });
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUserId(session?.user.id ?? null);
+    });
+    return () => {
+      data.subscription.unsubscribe();
+    };
   }, []);
 
   const load = useCallback(async () => {
@@ -120,6 +128,10 @@ export default function PostComments({
   }, [postId, authors]);
 
   const startCreate = () => {
+    if (!userId) {
+      openLoginModal(() => startCreate());
+      return;
+    }
     if (useInlineComposer) {
       setComposeOpen(true);
       return;
@@ -128,7 +140,12 @@ export default function PostComments({
   };
 
   const handleInlineSubmit = async () => {
-    if (!useInlineComposer || !userId || !composeText.trim() || submitting) return;
+    if (!useInlineComposer) return;
+    if (!userId) {
+      openLoginModal(() => void handleInlineSubmit());
+      return;
+    }
+    if (!composeText.trim() || submitting) return;
     setSubmitting(true);
     const content = `[${composeType}] ${composeText.trim()}`;
     const { data, error } = await supabase
@@ -167,6 +184,10 @@ export default function PostComments({
     userId === s.user_id || (!!postOwnerId && userId === postOwnerId);
 
   const onDelete = async (s: Solution) => {
+    if (!userId) {
+      openLoginModal(() => void onDelete(s));
+      return;
+    }
     if (!canDelete(s)) return;
     const previous = items;
     setItems((prev) => prev.filter((x) => x.id !== s.id));
@@ -258,17 +279,13 @@ export default function PostComments({
             <p className="text-sm text-slate-400">No insights yet.</p>
             {showInlineAddButton && (
               <div className="mt-3 flex justify-end">
-                {userId ? (
-                  <button
-                    type="button"
-                    onClick={startCreate}
-                    className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/20"
-                  >
-                    Add Insight
-                  </button>
-                ) : (
-                  <span className="text-xs text-slate-400">Login to provide insight.</span>
-                )}
+                <button
+                  type="button"
+                  onClick={startCreate}
+                  className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/20"
+                >
+                  Add Insight
+                </button>
               </div>
             )}
           </div>
@@ -328,17 +345,13 @@ export default function PostComments({
             })}
             {showInlineAddButton && (
               <div className="flex justify-end">
-                {userId ? (
-                  <button
-                    type="button"
-                    onClick={startCreate}
-                    className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/20"
-                  >
-                    Add Insight
-                  </button>
-                ) : (
-                  <span className="text-xs text-slate-400">Login to provide insight.</span>
-                )}
+                <button
+                  type="button"
+                  onClick={startCreate}
+                  className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/20"
+                >
+                  Add Insight
+                </button>
               </div>
             )}
           </div>

@@ -3,6 +3,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { createClient, type User } from "@supabase/supabase-js";
 import { ImageUp, Loader2, X } from "lucide-react";
+import { useLoginModal } from "../contexts/LoginModalContext";
 
 type Stage = "idea" | "exploring" | "prototype" | "testing" | "completed" | "failed";
 type WipStatus =
@@ -70,9 +71,16 @@ export default function CreatePost({
   const [message, setMessage] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [user, setUser] = useState<User | null>(null);
+  const { openLoginModal } = useLoginModal();
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUser(data.user ?? null));
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+    return () => {
+      data.subscription.unsubscribe();
+    };
   }, []);
 
   if (!isOpen) return null;
@@ -81,7 +89,7 @@ export default function CreatePost({
     event.preventDefault();
     setMessage(null);
     if (!user) {
-      setMessage("Sign in to publish a lab note.");
+      openLoginModal();
       return;
     }
     const titleValue = title.trim();
@@ -362,7 +370,7 @@ export default function CreatePost({
             )}
           </div>
           <p className="mt-5 text-xs text-slate-500">
-            InnoLab is for real experiments, not announcements.
+            AperNova is for real experiments, not announcements.
           </p>
           <div className="mt-5 flex items-center justify-end gap-3 border-t border-slate-800 pt-4">
             <button

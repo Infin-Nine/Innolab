@@ -87,6 +87,7 @@ create table if not exists public.posts (
   external_link text,
   wip_status text check (wip_status in ('idea', 'exploring', 'prototype', 'testing', 'completed', 'failed', 'built', 'wip')),
   media_url text,
+  is_published boolean not null default true,
   created_at timestamp with time zone default now()
 );
 
@@ -95,7 +96,8 @@ alter table public.posts
   add column if not exists observations text,
   add column if not exists reflection text,
   add column if not exists feedback_needed text[],
-  add column if not exists external_link text;
+  add column if not exists external_link text,
+  add column if not exists is_published boolean not null default true;
 
 alter table public.posts
   drop constraint if exists posts_wip_status_check;
@@ -109,10 +111,12 @@ alter table public.posts enable row level security;
 create index if not exists posts_user_id_idx on public.posts(user_id);
 create index if not exists posts_created_at_idx on public.posts(created_at desc);
 
-create policy "Public read posts"
+drop policy if exists "Public read posts" on public.posts;
+
+create policy "Public read published posts"
   on public.posts
   for select
-  using (true);
+  using (is_published = true or auth.uid() = user_id);
 
 create policy "Users can create own posts"
   on public.posts
@@ -127,6 +131,60 @@ create policy "Users can update own posts"
 
 create policy "Users can delete own posts"
   on public.posts
+  for delete
+  using (auth.uid() = user_id);
+
+-- Problems
+create table if not exists public.problems (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  title text not null,
+  description text not null,
+  affected_group text not null,
+  frequency text not null,
+  current_workaround text not null,
+  solution_type text not null,
+  is_real_confirmation boolean not null default true,
+  expected_outcome text,
+  additional_context text,
+  is_published boolean not null default true,
+  created_at timestamp with time zone default now()
+);
+
+alter table public.problems
+  add column if not exists is_real_confirmation boolean not null default true,
+  add column if not exists expected_outcome text,
+  add column if not exists additional_context text,
+  add column if not exists is_published boolean not null default true;
+
+alter table public.problems enable row level security;
+
+create index if not exists problems_user_id_idx on public.problems(user_id);
+create index if not exists problems_created_at_idx on public.problems(created_at desc);
+
+drop policy if exists "Public read problems" on public.problems;
+drop policy if exists "Users can create own problems" on public.problems;
+drop policy if exists "Users can update own problems" on public.problems;
+drop policy if exists "Users can delete own problems" on public.problems;
+
+create policy "Public read published problems"
+  on public.problems
+  for select
+  using (is_published = true or auth.uid() = user_id);
+
+create policy "Users can create own problems"
+  on public.problems
+  for insert
+  with check (auth.uid() = user_id);
+
+create policy "Users can update own problems"
+  on public.problems
+  for update
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+create policy "Users can delete own problems"
+  on public.problems
   for delete
   using (auth.uid() = user_id);
 
@@ -190,10 +248,19 @@ alter table public.validations enable row level security;
 create index if not exists validations_post_id_idx on public.validations(post_id);
 create index if not exists validations_user_id_idx on public.validations(user_id);
 
-create policy "Public read validations"
+drop policy if exists "Public read validations" on public.validations;
+
+create policy "Public read validations for published posts"
   on public.validations
   for select
-  using (true);
+  using (
+    exists (
+      select 1
+      from public.posts p
+      where p.id = validations.post_id
+        and (p.is_published = true or p.user_id = auth.uid())
+    )
+  );
 
 create policy "Users can create validations"
   on public.validations
@@ -226,10 +293,19 @@ alter table public.solutions enable row level security;
 create index if not exists solutions_post_id_idx on public.solutions(post_id);
 create index if not exists solutions_user_id_idx on public.solutions(user_id);
 
-create policy "Public read solutions"
+drop policy if exists "Public read solutions" on public.solutions;
+
+create policy "Public read solutions for published posts"
   on public.solutions
   for select
-  using (true);
+  using (
+    exists (
+      select 1
+      from public.posts p
+      where p.id = solutions.post_id
+        and (p.is_published = true or p.user_id = auth.uid())
+    )
+  );
 
 create policy "Users can create solutions"
   on public.solutions

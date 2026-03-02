@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "InnoLab",
-  description: "A focused innovation platform",
+  title: "AperNova",
+  description: "AperNova is a focused public knowledge network for innovation.",
 };
 
 export default function RootLayout({

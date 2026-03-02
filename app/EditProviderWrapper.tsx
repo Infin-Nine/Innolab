@@ -5,6 +5,8 @@ import { EditProvider, useEdit } from "./contexts/EditExperimentContext";
 import ExperimentEditModal from "./components/ExperimentEditModal";
 import { FeedbackSheetProvider } from "./contexts/FeedbackSheetContext";
 import FeedbackBottomSheet from "./components/FeedbackBottomSheet";
+import { LoginModalProvider } from "./contexts/LoginModalContext";
+import LoginModal from "./components/LoginModal";
 
 function EditPortal() {
   const { editId, closeEdit } = useEdit();
@@ -24,12 +26,15 @@ export default function EditProviderWrapper({
   children: React.ReactNode;
 }) {
   return (
-    <EditProvider>
-      <FeedbackSheetProvider>
-        {children}
-        <EditPortal />
-        <FeedbackBottomSheet />
-      </FeedbackSheetProvider>
-    </EditProvider>
+    <LoginModalProvider>
+      <EditProvider>
+        <FeedbackSheetProvider>
+          {children}
+          <EditPortal />
+          <FeedbackBottomSheet />
+          <LoginModal />
+        </FeedbackSheetProvider>
+      </EditProvider>
+    </LoginModalProvider>
   );
 }

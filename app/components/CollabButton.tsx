@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
+import { useLoginModal } from "../contexts/LoginModalContext";
 
 type CollabRow = {
   id: string;
@@ -26,6 +27,7 @@ export default function CollabButton({
   const [authUserId, setAuthUserId] = useState<string | null>(null);
   const [relation, setRelation] = useState<CollabRow | null>(null);
   const [loading, setLoading] = useState(false);
+  const { openLoginModal } = useLoginModal();
   const userId = currentUserId ?? authUserId;
 
   useEffect(() => {
@@ -71,7 +73,14 @@ export default function CollabButton({
   }, [loadRelation, targetProfileId, userId]);
 
   const handleClick = async () => {
-    if (!userId || !targetProfileId || userId === targetProfileId) {
+    if (!targetProfileId) {
+      return;
+    }
+    if (!userId) {
+      openLoginModal(() => void handleClick());
+      return;
+    }
+    if (userId === targetProfileId) {
       return;
     }
     setLoading(true);
@@ -153,7 +162,6 @@ export default function CollabButton({
 
   const disabled =
     loading ||
-    !userId ||
     relation?.status === "rejected" ||
     (relation?.status === "pending" && relation.requester_id === userId);
 

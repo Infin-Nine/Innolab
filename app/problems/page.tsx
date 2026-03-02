@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react
 import Link from "next/link";
 import { ArrowLeft, Lightbulb, X } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
+import { useLoginModal } from "../contexts/LoginModalContext";
 
 type Frequency = "daily" | "weekly" | "monthly" | "occasionally" | "rare";
 type SolutionType =
@@ -52,6 +53,7 @@ const frequencyBadge: Record<string, string> = {
 
 export default function ProblemsPage() {
   const [userId, setUserId] = useState<string | null>(null);
+  const { openLoginModal } = useLoginModal();
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -129,8 +131,12 @@ export default function ProblemsPage() {
       setLoading(false);
     };
     initialize();
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUserId(session?.user.id ?? null);
+    });
     return () => {
       mounted = false;
+      data.subscription.unsubscribe();
     };
   }, [fetchProblems]);
 
@@ -158,7 +164,7 @@ export default function ProblemsPage() {
     event.preventDefault();
     setMessage(null);
     if (!userId) {
-      setMessage("Sign in to submit an open problem.");
+      openLoginModal();
       return;
     }
     const validationError = validateForm();
@@ -237,7 +243,11 @@ export default function ProblemsPage() {
   };
 
   const confirmDeleteProblem = async () => {
-    if (!userId || !deleteTargetProblem) return;
+    if (!deleteTargetProblem) return;
+    if (!userId) {
+      openLoginModal(() => void confirmDeleteProblem());
+      return;
+    }
     setDeletingProblem(true);
     const { error } = await supabase
       .from("problems")
@@ -269,6 +279,12 @@ export default function ProblemsPage() {
             <button
               type="button"
               onClick={() => {
+                if (!userId) {
+                  openLoginModal(() => {
+                    setIsSubmitModalOpen(true);
+                  });
+                  return;
+                }
                 setMessage(null);
                 setEditingProblemId(null);
                 setTitle("");
@@ -349,18 +365,30 @@ export default function ProblemsPage() {
                     <div className="mt-4 flex flex-wrap items-center gap-2">
                       <button
                         type="button"
-                        onClick={() => setActiveProblem(problem)}
+                        onClick={() => {
+                          window.location.assign(`/problem/${problem.id}`);
+                        }}
                         className="rounded-full border border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-200 transition hover:border-cyan-400/60 hover:text-cyan-100"
                       >
                         View Details
                       </button>
-                      <Link
-                        href={`/lab/new?problemId=${problem.id}&problemTitle=${encodeURIComponent(problem.title)}`}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextHref = `/lab/new?problemId=${problem.id}&problemTitle=${encodeURIComponent(problem.title)}`;
+                          if (!userId) {
+                            openLoginModal(() => {
+                              window.location.assign(nextHref);
+                            });
+                            return;
+                          }
+                          window.location.assign(nextHref);
+                        }}
                         className="inline-flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/20"
                       >
                         <Lightbulb className="h-3.5 w-3.5" />
                         Propose Solution
-                      </Link>
+                      </button>
                       {problem.user_id === userId && (
                         <button
                           type="button"
@@ -508,12 +536,11 @@ export default function ProblemsPage() {
 
               <button
                 type="submit"
-                disabled={submitting || !userId}
+                disabled={submitting}
                 className="inline-flex w-full items-center justify-center rounded-full border border-cyan-500/40 bg-cyan-500/20 px-4 py-2 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-500/30 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {submitting ? "Submitting..." : editingProblemId ? "Update Problem" : "Submit Problem"}
               </button>
-              {!userId && <p className="text-xs text-slate-500">Sign in from the main lab page to submit.</p>}
             </form>
           </div>
         </div>

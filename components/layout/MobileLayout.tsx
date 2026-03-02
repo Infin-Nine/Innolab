@@ -29,7 +29,7 @@ export default function MobileLayout({
               <Atom className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-sm font-semibold">InnoLab</p>
+              <p className="text-sm font-semibold">AperNova</p>
               <p className="text-[11px] text-slate-400">Open Research Network</p>
             </div>
           </div>

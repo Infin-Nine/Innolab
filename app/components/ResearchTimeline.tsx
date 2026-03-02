@@ -6,6 +6,7 @@ import { MoreHorizontal } from "lucide-react";
 import { useEdit } from "../contexts/EditExperimentContext";
 import UnifiedDocumentModal from "./UnifiedDocumentModal";
 import { useFeedbackSheet } from "../contexts/FeedbackSheetContext";
+import { useLoginModal } from "../contexts/LoginModalContext";
 
 type WipStatus =
   | "idea"
@@ -89,6 +90,7 @@ export default function ResearchTimeline({
   const [actionMenuPostId, setActionMenuPostId] = useState<string | null>(null);
   const { openEdit } = useEdit();
   const { open: openFeedback } = useFeedbackSheet();
+  const { openLoginModal } = useLoginModal();
   const isOwner = (post: Post) => currentUserId === post.user_id;
 
   useEffect(() => {
@@ -211,7 +213,11 @@ export default function ResearchTimeline({
   }, [activePostId, currentUserId]);
 
   const handleToggleValidate = async () => {
-    if (!activePost || !currentUserId) return;
+    if (!activePost) return;
+    if (!currentUserId) {
+      openLoginModal(() => void handleToggleValidate());
+      return;
+    }
     if (activeIsValidated) {
       const { error } = await supabase
         .from("validations")
@@ -234,7 +240,11 @@ export default function ResearchTimeline({
   };
 
   const confirmDeletePost = async () => {
-    if (!deleteTargetPostId || !currentUserId) return;
+    if (!deleteTargetPostId) return;
+    if (!currentUserId) {
+      openLoginModal(() => void confirmDeletePost());
+      return;
+    }
     setDeletingPost(true);
     const { error } = await supabase
       .from("posts")
@@ -404,7 +414,17 @@ export default function ResearchTimeline({
         onValidate={activePost ? handleToggleValidate : undefined}
         isValidated={activeIsValidated}
         validateCount={activePost ? activeValidateCount : undefined}
-        onAddInsight={activePost ? () => openFeedback(activePost.id) : undefined}
+        onAddInsight={
+          activePost
+            ? () => {
+                if (!currentUserId) {
+                  openLoginModal(() => activePost && openFeedback(activePost.id));
+                  return;
+                }
+                openFeedback(activePost.id);
+              }
+            : undefined
+        }
         onEdit={activePost ? () => openEditGlobal(activePost) : undefined}
         canEdit={!!(activePost && isOwner(activePost))}
         onClose={closeModal}

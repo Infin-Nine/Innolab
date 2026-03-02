@@ -9,6 +9,7 @@ import UnifiedDocumentModal from "./UnifiedDocumentModal";
 import { useFeedbackSheet } from "../contexts/FeedbackSheetContext";
 import { supabase } from "../lib/supabaseClient";
 import type { Post, Profile, WipStatus } from "../types/models";
+import { useLoginModal } from "../contexts/LoginModalContext";
 
 type Props = {
   refreshKey?: number;
@@ -51,6 +52,7 @@ export default function LabNotebook({ refreshKey = 0, onPostsLoaded, compact = f
   const [activePostId, setActivePostId] = useState<string | null>(null);
   const { openEdit } = useEdit();
   const { open: openFeedback } = useFeedbackSheet();
+  const { openLoginModal } = useLoginModal();
   const [mySolutionPosts, setMySolutionPosts] = useState<Record<string, boolean>>({});
   const [collaboratorIds, setCollaboratorIds] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(0);
@@ -282,7 +284,10 @@ export default function LabNotebook({ refreshKey = 0, onPostsLoaded, compact = f
   }, [latestCreatedAt]);
 
   const toggleValidate = async (postId: string) => {
-    if (!userId) return;
+    if (!userId) {
+      openLoginModal(() => void toggleValidate(postId));
+      return;
+    }
     const isActive = !!validated[postId];
     if (isActive) {
       const { error } = await supabase
@@ -321,7 +326,11 @@ export default function LabNotebook({ refreshKey = 0, onPostsLoaded, compact = f
   };
 
   const confirmDeletePost = async () => {
-    if (!deleteTargetPostId || !userId) return;
+    if (!deleteTargetPostId) return;
+    if (!userId) {
+      openLoginModal(() => void confirmDeletePost());
+      return;
+    }
     setDeletingPost(true);
     const { error } = await supabase
       .from("posts")
@@ -603,7 +612,13 @@ export default function LabNotebook({ refreshKey = 0, onPostsLoaded, compact = f
           </button>
           <button
             type="button"
-            onClick={() => openFeedback(post.id)}
+            onClick={() => {
+              if (!userId) {
+                openLoginModal(() => openFeedback(post.id));
+                return;
+              }
+              openFeedback(post.id);
+            }}
             className={`rounded-full border border-emerald-500/40 bg-emerald-500/10 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/20 ${
               compact ? "min-h-11 px-4" : "px-3 py-1"
             }`}

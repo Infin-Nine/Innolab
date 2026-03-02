@@ -18,7 +18,7 @@ export default function CollabLayout({ title, subtitle, children }: Props) {
               <FlaskConical className="h-6 w-6" />
             </div>
             <div>
-              <p className="text-lg font-semibold">InnoLab</p>
+              <p className="text-lg font-semibold">AperNova</p>
               <p className="text-xs text-slate-400">Open Research & Innovation Network</p>
             </div>
           </div>

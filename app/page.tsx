@@ -5,7 +5,6 @@ import {
   useEffect,
   useMemo,
   useState,
-  type FormEvent,
 } from "react";
 import Image from "next/image";
 import ResearchTimeline from "./components/ResearchTimeline";
@@ -17,17 +16,12 @@ import ResponsiveLayout from "@/components/layout/ResponsiveLayout";
 import { supabase } from "./lib/supabaseClient";
 import type { Post } from "./types/models";
 import {
-  Atom,
   ImageUp,
-  Loader2,
-  LogIn,
   MoreHorizontal,
   PencilLine,
-  ShieldOff,
-  Users,
-  Zap,
   X,
 } from "lucide-react";
+import { useLoginModal } from "./contexts/LoginModalContext";
 
 type Profile = {
   id: string;
@@ -49,13 +43,7 @@ export default function Home() {
     ReturnType<typeof supabase.auth.getSession>
   >["data"]["session"]>(null);
   const [userId, setUserId] = useState<string | null>(null);
-  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
-  const [authEmail, setAuthEmail] = useState("");
-  const [authPassword, setAuthPassword] = useState("");
-  const [authName, setAuthName] = useState("");
-  const [authLoading, setAuthLoading] = useState(false);
-  const [authMessage, setAuthMessage] = useState<string | null>(null);
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const { openLoginModal } = useLoginModal();
 
   const [posts, setPosts] = useState<Post[]>([]);
   const [postsRefreshKey, setPostsRefreshKey] = useState(0);
@@ -138,52 +126,6 @@ export default function Home() {
     fetchProfile();
   }, [userId]);
 
-  const handleAuthSubmit = async (event: FormEvent) => {
-    event.preventDefault();
-    setAuthLoading(true);
-    setAuthMessage(null);
-    if (authMode === "login") {
-      const { error } = await supabase.auth.signInWithPassword({
-        email: authEmail,
-        password: authPassword,
-      });
-      if (error) {
-        setAuthMessage(error.message);
-      } else {
-        setAuthMessage("Welcome back to InnoLab.");
-      }
-    } else {
-      const { data, error } = await supabase.auth.signUp({
-        email: authEmail,
-        password: authPassword,
-      });
-      if (error) {
-        setAuthMessage(error.message);
-      } else {
-        const displayName =
-          authName || authEmail.split("@")[0] || "Innovator";
-        if (data.user) {
-          await supabase.from("profiles").upsert({
-            id: data.user.id,
-            username: displayName,
-          });
-        }
-        setAuthMessage("Check your inbox to confirm your account.");
-      }
-    }
-    setAuthLoading(false);
-  };
-
-  const openAuthModal = (mode: "login" | "signup") => {
-    setAuthMode(mode);
-    setAuthMessage(null);
-    setIsAuthModalOpen(true);
-  };
-
-  const closeAuthModal = () => {
-    setIsAuthModalOpen(false);
-  };
-
   const handleSignOutRequest = () => {
     setIsLogoutConfirmOpen(true);
   };
@@ -201,7 +143,7 @@ export default function Home() {
 
   const handleEditProfileSave = async () => {
     if (!userId) {
-      setProfileMessage("Sign in to update your profile.");
+      openLoginModal(() => void handleEditProfileSave());
       return;
     }
     setProfileMessage(null);
@@ -273,7 +215,10 @@ export default function Home() {
 
   const aboutText = profileData?.bio?.trim() || "Work description not added yet.";
   const openNewExperimentModal = () => {
-    if (!userId) return;
+    if (!userId) {
+      openLoginModal(() => openNewExperimentModal());
+      return;
+    }
     setIsFabMenuOpen(false);
     setIsPostModalOpen(true);
   };
@@ -287,6 +232,14 @@ export default function Home() {
     document.addEventListener("mousedown", onPointerDown);
     return () => document.removeEventListener("mousedown", onPointerDown);
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("auth") === "required") {
+      openLoginModal();
+    }
+  }, [openLoginModal]);
 
   const renderFeedSection = (compact: boolean) => (
     <section className="space-y-4 md:space-y-6">
@@ -477,269 +430,6 @@ export default function Home() {
       {activeTab === "feed" ? renderFeedSection(true) : renderProfileSection(true)}
     </>
   );
-
-  if (!session) {
-    return (
-      <div className="relative min-h-screen overflow-hidden bg-slate-950 text-slate-100">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_#0f172a,_#020617_60%)]" />
-        <div className="pointer-events-none absolute -top-32 left-1/2 h-96 w-96 -translate-x-1/2 rounded-full bg-cyan-500/20 blur-[140px]" />
-        <div className="pointer-events-none absolute bottom-0 right-0 h-80 w-80 rounded-full bg-fuchsia-500/20 blur-[120px]" />
-
-        <div className="relative mx-auto flex min-h-screen w-full max-w-6xl flex-col px-6 py-10">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan-500/30 bg-cyan-500/10 text-cyan-200">
-                <Atom className="h-6 w-6" />
-              </div>
-              <div>
-                <p className="text-lg font-semibold">InnoLab</p>
-                <p className="text-xs text-slate-400">Open Research & Innovation Network</p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => openAuthModal("login")}
-              className="rounded-full border border-slate-700 bg-slate-950/70 px-4 py-2 text-xs font-semibold text-slate-200 transition hover:border-cyan-400/60 hover:text-cyan-100"
-            >
-              Login
-            </button>
-          </div>
-
-          {envMissing && (
-            <div className="mt-6 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
-              Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to
-              enable live data.
-            </div>
-          )}
-
-          <section className="mt-16 grid gap-10 lg:grid-cols-[1.2fr_0.8fr]">
-            <div className="space-y-6">
-              <p className="text-xs uppercase tracking-[0.35em] text-cyan-400">
-                Future Lab Network
-              </p>
-              <h1 className="text-4xl font-semibold leading-tight sm:text-5xl">
-                Where Innovation Meets Adrenaline.
-              </h1>
-              <p className="text-sm text-slate-400">
-                Where independent research becomes visible.
-              </p>
-              <p className="text-base text-slate-300 sm:text-lg">
-                The social network for inventors, makers, and researchers. Share
-                your messy experiments, find your co-founder, and get funded—without
-                the academic pressure.
-              </p>
-              <div className="flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  onClick={() => openAuthModal("signup")}
-                  className="rounded-full border border-cyan-400/60 bg-cyan-500/20 px-6 py-3 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-500/30"
-                >
-                  Join the Revolution
-                </button>
-                <button
-                  type="button"
-                  onClick={() => openAuthModal("login")}
-                  className="rounded-full border border-slate-700 bg-slate-950/70 px-6 py-3 text-sm font-semibold text-slate-200 transition hover:border-cyan-400/60 hover:text-cyan-100"
-                >
-                  Login
-                </button>
-              </div>
-              <div className="flex flex-wrap gap-2 text-xs text-slate-400">
-                <span className="rounded-full border border-cyan-500/30 px-3 py-1">
-                  Supabase Auth
-                </span>
-                <span className="rounded-full border border-fuchsia-500/30 px-3 py-1">
-                  Proof of Creation
-                </span>
-                <span className="rounded-full border border-emerald-500/30 px-3 py-1">
-                  Collab Network
-                </span>
-              </div>
-            </div>
-            <div className="rounded-3xl border border-slate-800 bg-slate-950/80 p-6 shadow-2xl shadow-cyan-500/10">
-              <p className="text-xs uppercase tracking-[0.3em] text-fuchsia-400">
-                Live Lab Pulse
-              </p>
-              <div className="mt-6 space-y-4">
-                {[
-                  "Prototype neural-sensing wearables in public.",
-                  "Collaborate with deep-tech founders.",
-                  "Turn WIP notes into funding signals.",
-                ].map((line) => (
-                  <div
-                    key={line}
-                    className="rounded-2xl border border-slate-800 bg-slate-900/60 px-4 py-3 text-sm text-slate-200"
-                  >
-                    {line}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </section>
-
-          <section className="mt-20">
-            <div className="flex items-center justify-between gap-6">
-              <div>
-                <p className="text-xs uppercase tracking-[0.35em] text-emerald-400">
-                  Why InnoLab?
-                </p>
-                <h2 className="mt-2 text-2xl font-semibold">
-                  A future lab built for momentum.
-                </h2>
-              </div>
-            </div>
-            <div className="mt-8 grid gap-6 md:grid-cols-3">
-              <div className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6 shadow-lg shadow-cyan-500/10">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-cyan-500/40 bg-cyan-500/10 text-cyan-200">
-                  <Zap className="h-5 w-5" />
-                </div>
-                <h3 className="mt-4 text-lg font-semibold">
-                  Make Science Social.
-                </h3>
-                <p className="mt-2 text-sm text-slate-300">
-                  Research should not be boring. Share your work like you share
-                  your life—videos, quick updates, and raw ideas.
-                </p>
-              </div>
-              <div className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6 shadow-lg shadow-fuchsia-500/10">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-fuchsia-500/40 bg-fuchsia-500/10 text-fuchsia-200">
-                  <Users className="h-5 w-5" />
-                </div>
-                <h3 className="mt-4 text-lg font-semibold">Find Your Tribe.</h3>
-                <p className="mt-2 text-sm text-slate-300">
-                  Stop working in isolation. Connect with mentors, collaborators,
-                  and investors who get your vision.
-                </p>
-              </div>
-              <div className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6 shadow-lg shadow-emerald-500/10">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-200">
-                  <ShieldOff className="h-5 w-5" />
-                </div>
-                <h3 className="mt-4 text-lg font-semibold">Zero Pressure.</h3>
-                <p className="mt-2 text-sm text-slate-300">
-                  No need to look perfect. We celebrate Work in Progress. Fail
-                  fast, learn faster, and ship things that matter.
-                </p>
-              </div>
-            </div>
-          </section>
-        </div>
-
-        {isAuthModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 px-4 py-10">
-            <div className="w-full max-w-md rounded-3xl border border-slate-800 bg-slate-950/95 p-6 shadow-2xl shadow-slate-900/80">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.3em] text-cyan-400">
-                    Auth Console
-                  </p>
-                  <h2 className="mt-2 text-xl font-semibold">
-                    {authMode === "login"
-                      ? "Login to InnoLab"
-                      : "Join the Revolution"}
-                  </h2>
-                </div>
-                <button
-                  type="button"
-                  onClick={closeAuthModal}
-                  className="rounded-full border border-slate-700 p-2 text-slate-200 transition hover:border-cyan-400/60 hover:text-cyan-100"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-              <form
-                onSubmit={handleAuthSubmit}
-                className="mt-5 space-y-4"
-              >
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setAuthMode("login")}
-                    className={`flex-1 rounded-full px-3 py-2 text-xs font-semibold transition ${
-                      authMode === "login"
-                        ? "bg-cyan-500/20 text-cyan-100"
-                        : "bg-slate-900 text-slate-400 hover:text-slate-200"
-                    }`}
-                  >
-                    Log In
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setAuthMode("signup")}
-                    className={`flex-1 rounded-full px-3 py-2 text-xs font-semibold transition ${
-                      authMode === "signup"
-                        ? "bg-fuchsia-500/20 text-fuchsia-100"
-                        : "bg-slate-900 text-slate-400 hover:text-slate-200"
-                    }`}
-                  >
-                    Sign Up
-                  </button>
-                </div>
-                {authMode === "signup" && (
-                  <div className="space-y-1">
-                    <label className="text-xs text-slate-400">
-                      Display name
-                    </label>
-                    <input
-                      value={authName}
-                      onChange={(event) => setAuthName(event.target.value)}
-                      className="w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
-                      placeholder="Nova Innovator"
-                      type="text"
-                    />
-                  </div>
-                )}
-                <div className="space-y-1">
-                  <label className="text-xs text-slate-400">Email</label>
-                  <input
-                    value={authEmail}
-                    onChange={(event) => setAuthEmail(event.target.value)}
-                    className="w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
-                    placeholder="you@lab.com"
-                    type="email"
-                    required
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs text-slate-400">Password</label>
-                  <input
-                    value={authPassword}
-                    onChange={(event) => setAuthPassword(event.target.value)}
-                    className="w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
-                    placeholder="••••••••"
-                    type="password"
-                    required
-                  />
-                </div>
-                {authMessage && (
-                  <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-3 py-2 text-xs text-cyan-100">
-                    {authMessage}
-                  </div>
-                )}
-                <button
-                  type="submit"
-                  disabled={authLoading || envMissing}
-                  className="flex w-full items-center justify-center gap-2 rounded-full border border-cyan-500/40 bg-cyan-500/20 py-2 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-500/30 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {authLoading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Processing...
-                    </>
-                  ) : (
-                    <>
-                      <LogIn className="h-4 w-4" />
-                      {authMode === "login" ? "Log In" : "Create Account"}
-                    </>
-                  )}
-                </button>
-              </form>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#0f172a,_#020617_55%)] text-slate-100">

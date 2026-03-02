@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Loader2, X } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
+import { useLoginModal } from "../contexts/LoginModalContext";
 
 type WipStatus =
   | "idea"
@@ -56,6 +57,7 @@ export default function ExperimentEditModal({
   onClose,
   onSaved,
 }: Props) {
+  const { openLoginModal } = useLoginModal();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -121,7 +123,11 @@ export default function ExperimentEditModal({
       const { data } = await supabase.auth.getUser();
       uid = data.user?.id ?? null;
     }
-    if (!postId || !uid) return;
+    if (!postId) return;
+    if (!uid) {
+      openLoginModal(() => void save());
+      return;
+    }
     setSaving(true);
     setMessage(null);
     const payload = {

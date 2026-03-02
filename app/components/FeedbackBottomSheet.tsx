@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Loader2, X } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useFeedbackSheet } from "../contexts/FeedbackSheetContext";
+import { useLoginModal } from "../contexts/LoginModalContext";
 
 const TYPES = [
   "Suggest Improvement",
@@ -23,9 +24,16 @@ export default function FeedbackBottomSheet() {
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const taRef = useRef<HTMLTextAreaElement | null>(null);
+  const { openLoginModal } = useLoginModal();
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUserId(session?.user.id ?? null);
+    });
+    return () => {
+      data.subscription.unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
@@ -47,10 +55,14 @@ export default function FeedbackBottomSheet() {
   }, [isOpen, loading, close]);
 
   const show = isOpen && !!postId;
-  const canSubmit = text.trim().length > 0 && !!userId && !!postId && !loading;
+  const canSubmit = text.trim().length > 0 && !!postId && !loading;
 
   const onSubmit = async () => {
-    if (!canSubmit || !postId || !userId) return;
+    if (!canSubmit || !postId) return;
+    if (!userId) {
+      openLoginModal(() => void onSubmit());
+      return;
+    }
     setLoading(true);
     const { data: userData } = await supabase.auth.getUser();
     const u = userData?.user ?? null;
