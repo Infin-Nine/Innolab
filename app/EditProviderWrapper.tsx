@@ -7,6 +7,7 @@ import { FeedbackSheetProvider } from "./contexts/FeedbackSheetContext";
 import FeedbackBottomSheet from "./components/FeedbackBottomSheet";
 import { LoginModalProvider } from "./contexts/LoginModalContext";
 import LoginModal from "./components/LoginModal";
+import { AuthProvider } from "./contexts/AuthContext";
 
 function EditPortal() {
   const { editId, closeEdit } = useEdit();
@@ -26,15 +27,17 @@ export default function EditProviderWrapper({
   children: React.ReactNode;
 }) {
   return (
-    <LoginModalProvider>
-      <EditProvider>
-        <FeedbackSheetProvider>
-          {children}
-          <EditPortal />
-          <FeedbackBottomSheet />
-          <LoginModal />
-        </FeedbackSheetProvider>
-      </EditProvider>
-    </LoginModalProvider>
+    <AuthProvider>
+      <LoginModalProvider>
+        <EditProvider>
+          <FeedbackSheetProvider>
+            {children}
+            <EditPortal />
+            <FeedbackBottomSheet />
+            <LoginModal />
+          </FeedbackSheetProvider>
+        </EditProvider>
+      </LoginModalProvider>
+    </AuthProvider>
   );
 }

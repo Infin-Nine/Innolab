@@ -14,8 +14,19 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AperNova",
-  description: "AperNova is a focused public knowledge network for innovation.",
+  title: "InoLabium – Open Research & Innovation Network",
+  description:
+    "InoLabium is a public research network where experiments, validation, and innovation happen in the open.",
+  openGraph: {
+    title: "InoLabium – Open Research & Innovation Network",
+    description:
+      "InoLabium is a public research network where experiments, validation, and innovation happen in the open.",
+  },
+  twitter: {
+    title: "InoLabium – Open Research & Innovation Network",
+    description:
+      "InoLabium is a public research network where experiments, validation, and innovation happen in the open.",
+  },
 };
 
 export default function RootLayout({

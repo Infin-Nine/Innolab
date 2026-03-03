@@ -1,17 +1,28 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Loader2, LogIn, X } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useLoginModal } from "../contexts/LoginModalContext";
+import { useAuth } from "../contexts/AuthContext";
 
 export default function LoginModal() {
   const { isOpen, mode, setMode, closeLoginModal, consumePendingAction } = useLoginModal();
+  const { user } = useAuth();
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [authName, setAuthName] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
   const [authMessage, setAuthMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isOpen || !user) return;
+    closeLoginModal();
+    const pending = consumePendingAction();
+    if (pending) {
+      setTimeout(() => pending(), 0);
+    }
+  }, [isOpen, user, closeLoginModal, consumePendingAction]);
 
   if (!isOpen) {
     return null;
@@ -33,8 +44,6 @@ export default function LoginModal() {
         return;
       }
       setAuthLoading(false);
-      closeLoginModal();
-      consumePendingAction()?.();
       return;
     }
 
@@ -66,7 +75,7 @@ export default function LoginModal() {
           <div>
             <p className="text-xs uppercase tracking-[0.3em] text-cyan-400">Auth Console</p>
             <h2 className="mt-2 text-xl font-semibold">
-              {mode === "login" ? "Login to AperNova" : "Join the Lab"}
+              {mode === "login" ? "Login to InoLabium" : "Join the Lab"}
             </h2>
           </div>
           <button

@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
+import { useAuth } from "./AuthContext";
 
 type AuthMode = "login" | "signup";
 
@@ -19,12 +20,17 @@ export function LoginModalProvider({ children }: { children: React.ReactNode }) 
   const [isOpen, setIsOpen] = useState(false);
   const [mode, setMode] = useState<AuthMode>("login");
   const pendingActionRef = useRef<(() => void) | null>(null);
+  const { user } = useAuth();
 
   const openLoginModal = useCallback((onSuccess?: () => void, preferredMode: AuthMode = "login") => {
+    if (user) {
+      onSuccess?.();
+      return;
+    }
     pendingActionRef.current = onSuccess ?? null;
     setMode(preferredMode);
     setIsOpen(true);
-  }, []);
+  }, [user]);
 
   const closeLoginModal = useCallback(() => {
     setIsOpen(false);
@@ -58,4 +64,3 @@ export function useLoginModal() {
   }
   return ctx;
 }
-

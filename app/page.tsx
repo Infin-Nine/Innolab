@@ -22,6 +22,7 @@ import {
   X,
 } from "lucide-react";
 import { useLoginModal } from "./contexts/LoginModalContext";
+import { useAuth } from "./contexts/AuthContext";
 
 type Profile = {
   id: string;
@@ -39,10 +40,7 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<"feed" | "profile">("feed");
-  const [session, setSession] = useState<Awaited<
-    ReturnType<typeof supabase.auth.getSession>
-  >["data"]["session"]>(null);
-  const [userId, setUserId] = useState<string | null>(null);
+  const { session, userId } = useAuth();
   const { openLoginModal } = useLoginModal();
 
   const [posts, setPosts] = useState<Post[]>([]);
@@ -69,27 +67,6 @@ export default function Home() {
     () => posts.filter((post) => post.user_id === userId),
     [posts, userId]
   );
-
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setUserId(data.session?.user.id ?? null);
-    });
-    const { data } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      setSession(newSession);
-      setUserId(newSession?.user.id ?? null);
-      if (!newSession) {
-        setProfileData(null);
-        setProfileUsername("");
-        setProfileBio("");
-        setProfileSkills("");
-      }
-    });
-    return () => {
-      data.subscription.unsubscribe();
-    };
-  }, []);
 
   const handlePostsLoaded = useCallback((loadedPosts: Post[]) => {
     setPosts(loadedPosts);
@@ -216,7 +193,10 @@ export default function Home() {
   const aboutText = profileData?.bio?.trim() || "Work description not added yet.";
   const openNewExperimentModal = () => {
     if (!userId) {
-      openLoginModal(() => openNewExperimentModal());
+      openLoginModal(() => {
+        setIsFabMenuOpen(false);
+        setIsPostModalOpen(true);
+      });
       return;
     }
     setIsFabMenuOpen(false);

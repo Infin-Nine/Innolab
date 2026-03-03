@@ -369,9 +369,7 @@ export default function CreatePost({
               </div>
             )}
           </div>
-          <p className="mt-5 text-xs text-slate-500">
-            AperNova is for real experiments, not announcements.
-          </p>
+          <p className="mt-5 text-xs text-slate-500">InoLabium is for real experiments, not announcements.</p>
           <div className="mt-5 flex items-center justify-end gap-3 border-t border-slate-800 pt-4">
             <button
               type="button"

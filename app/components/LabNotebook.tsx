@@ -10,6 +10,7 @@ import { useFeedbackSheet } from "../contexts/FeedbackSheetContext";
 import { supabase } from "../lib/supabaseClient";
 import type { Post, Profile, WipStatus } from "../types/models";
 import { useLoginModal } from "../contexts/LoginModalContext";
+import { useAuth } from "../contexts/AuthContext";
 
 type Props = {
   refreshKey?: number;
@@ -44,8 +45,7 @@ export default function LabNotebook({ refreshKey = 0, onPostsLoaded, compact = f
   const [loading, setLoading] = useState(false);
   const [feedError, setFeedError] = useState<string | null>(null);
   const [lastFetchCount, setLastFetchCount] = useState<number | null>(null);
-  const [userId, setUserId] = useState<string | null>(null);
-  const [authResolved, setAuthResolved] = useState(false);
+  const { userId, loading: authLoading } = useAuth();
   const [validated, setValidated] = useState<Record<string, boolean>>({});
   const [counts, setCounts] = useState<Record<string, { v: number; s: number }>>({});
   const [authors, setAuthors] = useState<Record<string, Profile>>({});
@@ -64,30 +64,7 @@ export default function LabNotebook({ refreshKey = 0, onPostsLoaded, compact = f
   const [actionMenuPostId, setActionMenuPostId] = useState<string | null>(null);
 
   useEffect(() => {
-    let mounted = true;
-    const resolveAuth = async () => {
-      try {
-        const { data } = await supabase.auth.getSession();
-        if (!mounted) return;
-        const u = data.session?.user ?? null;
-        setUserId(u?.id ?? null);
-      } finally {
-        if (mounted) setAuthResolved(true);
-      }
-    };
-    resolveAuth();
-    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUserId(session?.user?.id ?? null);
-      setAuthResolved(true);
-    });
-    return () => {
-      mounted = false;
-      data.subscription.unsubscribe();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!authResolved) return;
+    if (authLoading) return;
     let mounted = true;
     const fetchPosts = async () => {
       setLoading(true);
@@ -190,7 +167,7 @@ export default function LabNotebook({ refreshKey = 0, onPostsLoaded, compact = f
     return () => {
       mounted = false;
     };
-  }, [refreshKey, onPostsLoaded, page, authResolved]);
+  }, [refreshKey, onPostsLoaded, page, authLoading]);
 
   useEffect(() => {
     let mounted = true;
@@ -283,18 +260,14 @@ export default function LabNotebook({ refreshKey = 0, onPostsLoaded, compact = f
     return () => clearInterval(id);
   }, [latestCreatedAt]);
 
-  const toggleValidate = async (postId: string) => {
-    if (!userId) {
-      openLoginModal(() => void toggleValidate(postId));
-      return;
-    }
+  const runToggleValidate = async (postId: string, activeUserId: string) => {
     const isActive = !!validated[postId];
     if (isActive) {
       const { error } = await supabase
         .from("validations")
         .delete()
         .eq("post_id", postId)
-        .eq("user_id", userId);
+        .eq("user_id", activeUserId);
       if (!error) {
         setValidated((prev) => ({ ...prev, [postId]: false }));
         setCounts((prev) => ({
@@ -305,7 +278,7 @@ export default function LabNotebook({ refreshKey = 0, onPostsLoaded, compact = f
     } else {
       const { error } = await supabase
         .from("validations")
-        .insert({ post_id: postId, user_id: userId });
+        .insert({ post_id: postId, user_id: activeUserId });
       if (!error) {
         setValidated((prev) => ({ ...prev, [postId]: true }));
         setCounts((prev) => ({
@@ -314,6 +287,20 @@ export default function LabNotebook({ refreshKey = 0, onPostsLoaded, compact = f
         }));
       }
     }
+  };
+
+  const toggleValidate = async (postId: string) => {
+    if (!userId) {
+      openLoginModal(() => {
+        void supabase.auth.getUser().then(({ data }) => {
+          const nextUserId = data.user?.id ?? null;
+          if (!nextUserId) return;
+          void runToggleValidate(postId, nextUserId);
+        });
+      });
+      return;
+    }
+    await runToggleValidate(postId, userId);
   };
 
   const requestDeletePost = (postId: string) => {
