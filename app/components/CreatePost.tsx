@@ -186,6 +186,13 @@ export default function CreatePost({
     setStage("idea");
     setFile(null);
     setUploading(false);
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("experiment:created", {
+          detail: { userId: user.id },
+        })
+      );
+    }
     onPostCreated?.();
     onClose();
   };

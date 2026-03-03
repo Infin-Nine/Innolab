@@ -42,6 +42,7 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<"feed" | "profile">("feed");
   const { session, userId } = useAuth();
   const { openLoginModal } = useLoginModal();
+  const profileUserId = userId ?? session?.user?.id ?? null;
 
   const [posts, setPosts] = useState<Post[]>([]);
   const [postsRefreshKey, setPostsRefreshKey] = useState(0);
@@ -59,13 +60,14 @@ export default function Home() {
   const [profileUsername, setProfileUsername] = useState("");
   const [profileBio, setProfileBio] = useState("");
   const [profileSkills, setProfileSkills] = useState("");
+  const [experimentCount, setExperimentCount] = useState(0);
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
 
   const envMissing = !supabaseUrl || !supabaseAnonKey;
 
   const userPosts = useMemo(
-    () => posts.filter((post) => post.user_id === userId),
-    [posts, userId]
+    () => posts.filter((post) => post.user_id === profileUserId),
+    [posts, profileUserId]
   );
 
   const handlePostsLoaded = useCallback((loadedPosts: Post[]) => {
@@ -74,11 +76,28 @@ export default function Home() {
 
   const handlePostCreated = () => {
     setPostsRefreshKey((prev) => prev + 1);
+    if (profileUserId) {
+      void fetchExperimentCount(profileUserId);
+    }
     setIsPostModalOpen(false);
     setIsFabMenuOpen(false);
   };
+
+  const fetchExperimentCount = useCallback(async (profileUserId: string) => {
+    const { count, error } = await supabase
+      .from("posts")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", profileUserId);
+    if (error) {
+      console.error("Failed to fetch experiment count:", error.message);
+      setExperimentCount(0);
+      return;
+    }
+    setExperimentCount(count ?? 0);
+  }, []);
+
   useEffect(() => {
-    if (!userId) {
+    if (!profileUserId) {
       return;
     }
     const fetchProfile = async () => {
@@ -86,7 +105,7 @@ export default function Home() {
       const { data, error } = await supabase
         .from("profiles")
         .select("*")
-        .eq("id", userId)
+        .eq("id", profileUserId)
         .maybeSingle();
       if (!error && data) {
         setProfileData(data as Profile);
@@ -101,7 +120,21 @@ export default function Home() {
       setProfileLoading(false);
     };
     fetchProfile();
-  }, [userId]);
+    void fetchExperimentCount(profileUserId);
+  }, [profileUserId, fetchExperimentCount]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onExperimentCreated = (event: Event) => {
+      const customEvent = event as CustomEvent<{ userId?: string }>;
+      const createdByUserId = customEvent.detail?.userId ?? null;
+      if (!profileUserId) return;
+      if (createdByUserId && createdByUserId !== profileUserId) return;
+      void fetchExperimentCount(profileUserId);
+    };
+    window.addEventListener("experiment:created", onExperimentCreated as EventListener);
+    return () => window.removeEventListener("experiment:created", onExperimentCreated as EventListener);
+  }, [profileUserId, fetchExperimentCount]);
 
   const handleSignOutRequest = () => {
     setIsLogoutConfirmOpen(true);
@@ -304,11 +337,11 @@ export default function Home() {
                   </div>
                   <div className="mt-3 text-xs text-slate-500">
                     <p>
-                      Experiments: {userPosts.length === 0 ? "—" : userPosts.length}
+                      Experiments: {experimentCount}
                       {" | "}Joined:{" "}
                       {session.user.created_at ? new Date(session.user.created_at).getFullYear() : "—"}
                     </p>
-                    {userPosts.length === 0 && <p className="mt-1">Start your first experiment</p>}
+                    {experimentCount === 0 && <p className="mt-1">Start your first experiment</p>}
                   </div>
                 </div>
               </div>
@@ -377,8 +410,8 @@ export default function Home() {
             <h2 className="text-lg font-semibold">Work Timeline</h2>
             <div className={compact ? "mt-3" : "mt-4"}>
               <ResearchTimeline
-                userId={userId ?? ""}
-                currentUserId={userId}
+                userId={profileUserId ?? ""}
+                currentUserId={profileUserId}
                 initialPosts={userPosts.length > 0 ? userPosts : undefined}
                 showAuthor={false}
                 compact={compact}

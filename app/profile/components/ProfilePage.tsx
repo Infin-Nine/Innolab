@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -97,10 +97,11 @@ export default function ProfilePage({ routeProfileId = null }: Props) {
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [experiments, setExperiments] = useState<Post[]>([]);
+  const [experimentCount, setExperimentCount] = useState(0);
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
 
-  const finalUserId = routeProfileId ?? authUserId;
-  const isOwnProfile = !!finalUserId && !!authUserId && finalUserId === authUserId;
+  const profileUserId = routeProfileId ?? authUserId;
+  const isOwnProfile = !!profileUserId && !!authUserId && profileUserId === authUserId;
 
   useEffect(() => {
     let mounted = true;
@@ -119,20 +120,13 @@ export default function ProfilePage({ routeProfileId = null }: Props) {
     };
   }, []);
 
-  useEffect(() => {
-    if (!authResolved || !finalUserId) return;
-    const fetchProfileAndExperiments = async () => {
+  const fetchProfileAndExperiments = useCallback(
+    async (userId: string) => {
       setLoadingProfile(true);
-      const { data: profileData } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", finalUserId)
-        .maybeSingle();
-      const { data: postData } = await supabase
-        .from("posts")
-        .select("*")
-        .eq("user_id", finalUserId)
-        .order("created_at", { ascending: false });
+      const [{ data: profileData }, { data: postData }] = await Promise.all([
+        supabase.from("profiles").select("*").eq("id", userId).maybeSingle(),
+        supabase.from("posts").select("*").eq("user_id", userId).order("created_at", { ascending: false }),
+      ]);
 
       setProfile((profileData as Profile) ?? null);
       const normalized =
@@ -151,17 +145,39 @@ export default function ProfilePage({ routeProfileId = null }: Props) {
           });
 
       setExperiments(filtered);
-      console.log("Final userId:", finalUserId);
-      console.log("Experiments:", filtered);
+      setExperimentCount(filtered.length);
       setLoadingProfile(false);
+    },
+    [isOwnProfile]
+  );
+
+  useEffect(() => {
+    if (!authResolved || !profileUserId) return;
+    const timer = window.setTimeout(() => {
+      void fetchProfileAndExperiments(profileUserId);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [profileUserId, authResolved, fetchProfileAndExperiments]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handleExperimentCreated = (event: Event) => {
+      const customEvent = event as CustomEvent<{ userId?: string }>;
+      const createdByUserId = customEvent.detail?.userId ?? null;
+      if (!profileUserId) return;
+      if (createdByUserId && createdByUserId !== profileUserId) return;
+      void fetchProfileAndExperiments(profileUserId);
     };
-    void fetchProfileAndExperiments();
-  }, [finalUserId, authResolved, authUserId, isOwnProfile]);
+    window.addEventListener("experiment:created", handleExperimentCreated as EventListener);
+    return () => {
+      window.removeEventListener("experiment:created", handleExperimentCreated as EventListener);
+    };
+  }, [profileUserId, fetchProfileAndExperiments]);
 
   const skills = useMemo(() => formatSkills(profile), [profile]);
   const aboutText = profile?.bio?.trim() || "This innovator has not added a bio yet.";
 
-  if (!authResolved || !finalUserId || loadingProfile) {
+  if (!authResolved || !profileUserId || loadingProfile) {
     return (
       <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#0f172a,_#020617_55%)] text-slate-100">
         <div className="mx-auto w-full max-w-6xl px-6 py-10">
@@ -222,12 +238,12 @@ export default function ProfilePage({ routeProfileId = null }: Props) {
                       <span className="text-xs text-slate-500">No skills listed yet.</span>
                     )}
                   </div>
-                  <p className="mt-3 text-xs text-slate-500">Experiments: {experiments.length}</p>
+                  <p className="mt-3 text-xs text-slate-500">Experiments: {experimentCount}</p>
                 </div>
               </div>
               {!isOwnProfile && (
                 <CollabButton
-                  targetProfileId={finalUserId}
+                  targetProfileId={profileUserId}
                   currentUserId={authUserId}
                   className="px-3 py-1 text-xs"
                 />
@@ -240,7 +256,7 @@ export default function ProfilePage({ routeProfileId = null }: Props) {
             <div className="mt-4">
               {experiments && experiments.length > 0 ? (
                 <ResearchTimeline
-                  userId={finalUserId}
+                  userId={profileUserId}
                   currentUserId={authUserId}
                   initialPosts={experiments}
                   showAuthor={false}

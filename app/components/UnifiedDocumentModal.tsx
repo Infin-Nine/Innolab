@@ -68,6 +68,7 @@ export default function UnifiedDocumentModal({
   canDelete = false,
 }: Props) {
   const bodyText = post?.description ?? post?.problem_statement ?? "No content available.";
+  const [isImageOpen, setIsImageOpen] = useState(false);
   const [insightOpen, setInsightOpen] = useState(false);
   const [insightType, setInsightType] = useState("Suggest Improvement");
   const [insightText, setInsightText] = useState("");
@@ -202,15 +203,21 @@ export default function UnifiedDocumentModal({
                 <p className="text-sm font-medium text-slate-400">Evidence</p>
                 {post.media_url && (
                   <div className="overflow-hidden rounded-2xl border border-slate-800">
-                    <div className="relative aspect-[16/9] max-h-96 w-full">
+                    <button
+                      type="button"
+                      onClick={() => setIsImageOpen(true)}
+                      className="block w-full"
+                      aria-label="Open evidence image full screen"
+                    >
                       <Image
                         src={post.media_url}
                         alt="Experiment evidence"
-                        className="object-cover"
-                        fill
+                        className="h-auto w-full object-contain"
+                        width={1600}
+                        height={900}
                         sizes="(max-width: 768px) 100vw, 768px"
                       />
-                    </div>
+                    </button>
                   </div>
                 )}
                 {post.external_link && (
@@ -306,6 +313,32 @@ export default function UnifiedDocumentModal({
             </div>
           </div>
         </div>
+        {isImageOpen && post.media_url && (
+          <div
+            className="fixed inset-0 z-[96] overflow-y-auto bg-black/90 p-4"
+            onClick={() => setIsImageOpen(false)}
+          >
+            <button
+              type="button"
+              onClick={() => setIsImageOpen(false)}
+              className="fixed right-4 top-4 inline-flex h-11 w-11 items-center justify-center rounded-full border border-slate-600 bg-black/60 text-slate-100 transition hover:border-slate-400"
+              aria-label="Close full-screen image"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <div className="flex min-h-full items-center justify-center py-10">
+              <Image
+                src={post.media_url}
+                alt="Experiment evidence full size"
+                width={2400}
+                height={1600}
+                className="max-h-[90vh] max-w-[90vw] h-auto w-auto object-contain"
+                sizes="90vw"
+                onClick={(event) => event.stopPropagation()}
+              />
+            </div>
+          </div>
+        )}
         {insightOpen && (
           <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/70 p-4">
             <div className="w-full max-w-xl rounded-3xl border border-slate-800 bg-slate-950 p-4 md:p-5">
