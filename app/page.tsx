@@ -7,6 +7,7 @@ import {
   useState,
 } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import ResearchTimeline from "./components/ResearchTimeline";
 import CreatePost from "./components/CreatePost";
 import LabNotebook from "./components/LabNotebook";
@@ -250,7 +251,8 @@ export default function Home() {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     if (params.get("auth") === "required") {
-      openLoginModal();
+      const mode = params.get("mode");
+      openLoginModal(undefined, mode === "signup" ? "signup" : "login");
     }
   }, [openLoginModal]);
 
@@ -288,7 +290,25 @@ export default function Home() {
       </header>
       {!session ? (
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 px-4 py-6 text-sm text-slate-400">
-          Sign in to view your trust ledger.
+          <p>Sign in to view your trust ledger.</p>
+          <div className={`mt-4 flex gap-3 ${compact ? "flex-col" : "flex-row"}`}>
+            <Link
+              href="/login"
+              className={`inline-flex items-center justify-center rounded-full border border-cyan-500/50 bg-cyan-500/20 px-4 py-2 text-xs font-semibold text-cyan-100 transition hover:bg-cyan-500/30 hover:border-cyan-400/60 ${
+                compact ? "w-full min-h-11" : ""
+              }`}
+            >
+              Login
+            </Link>
+            <Link
+              href="/signup"
+              className={`inline-flex items-center justify-center rounded-full border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/20 ${
+                compact ? "w-full min-h-11" : ""
+              }`}
+            >
+              Sign Up
+            </Link>
+          </div>
         </div>
       ) : (
         <div className="space-y-4 md:space-y-6">

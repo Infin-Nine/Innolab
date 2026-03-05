@@ -73,7 +73,7 @@ export default function LabNotebook({ refreshKey = 0, onPostsLoaded, compact = f
       const to = from + 15 - 1;
       const { data, error } = await supabase
         .from("posts")
-        .select("*, validations(count), solutions(count)")
+        .select("*, problems(title), validations(count), solutions(count)")
         .order("created_at", { ascending: false })
         .range(from, to);
       if (error) {
@@ -87,37 +87,15 @@ export default function LabNotebook({ refreshKey = 0, onPostsLoaded, compact = f
         return;
       }
       const rawRows = (data as Post[]) ?? [];
-      const problemIds = Array.from(
-        new Set(rawRows.map((post) => post.problem_id).filter((id): id is string => !!id))
-      );
-      const problemTitleMap: Record<string, string> = {};
-      if (problemIds.length) {
-        const { data: problemRows, error: problemsError } = await supabase
-          .from("problems")
-          .select("id, title")
-          .in("id", problemIds);
-        if (problemsError) {
-          console.error(problemsError);
-        } else {
-          ((problemRows as { id: string; title: string | null }[] | null) ?? []).forEach(
-            (problem) => {
-              if (problem.id) {
-                problemTitleMap[problem.id] = problem.title ?? "";
-              }
-            }
-          );
-        }
-      }
       const rows = rawRows.map((post) => {
-        const linkedTitle = post.problem_id ? problemTitleMap[post.problem_id] : null;
+        const problemRelation = Array.isArray(post.problems) ? post.problems[0] : post.problems;
+        const linkedTitle =
+          (problemRelation?.title && String(problemRelation.title).trim()) ||
+          (post.problem_title && String(post.problem_title).trim()) ||
+          null;
         return {
           ...post,
-          problems: post.problem_id
-            ? {
-                id: post.problem_id,
-                title: linkedTitle ?? null,
-              }
-            : null,
+          problems: linkedTitle ? { title: linkedTitle } : null,
           problem_title: linkedTitle ?? null,
         };
       });
@@ -450,6 +428,9 @@ export default function LabNotebook({ refreshKey = 0, onPostsLoaded, compact = f
 
   const renderFeedCard = (post: Post) => {
     const problemPreview = post.problem_statement ?? "No problem statement provided.";
+    const linkedProblemTitle = (
+      Array.isArray(post.problems) ? post.problems[0]?.title : post.problems?.title
+    ) ?? post.problem_title;
     const author = authors[post.user_id];
     const displayName = author?.username?.trim() ?? "";
     const createdAtText = post.created_at
@@ -507,6 +488,11 @@ export default function LabNotebook({ refreshKey = 0, onPostsLoaded, compact = f
               onClick={() => setActivePostId(post.id)}
               className="mt-4 text-left text-lg font-semibold text-slate-100 transition hover:text-cyan-100"
             >
+              {linkedProblemTitle && (
+                <p className="mb-1 text-xs font-medium text-amber-200/90">
+                  Solving Problem: {linkedProblemTitle}
+                </p>
+              )}
               {post.title ?? "Untitled Experiment"}
             </button>
             {isActiveContributor && (
@@ -665,7 +651,7 @@ export default function LabNotebook({ refreshKey = 0, onPostsLoaded, compact = f
           )}
           {sections.explore.length > 0 && (
             <div className="space-y-3">
-              <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Explore Research</p>
+              <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Latest Experiments</p>
               {sections.explore.map(renderFeedCard)}
             </div>
           )}

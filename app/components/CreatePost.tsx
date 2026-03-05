@@ -170,6 +170,7 @@ export default function CreatePost({
         title: titleValue,
         wip_status: fallbackStatus,
         media_url: publicUrl,
+        ...(linkedProblemId?.trim() ? { problem_id: linkedProblemId.trim() } : {}),
       });
       if (fallback.error) {
         setMessage(fallback.error.message);

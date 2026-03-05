@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, Lightbulb, X } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useLoginModal } from "../contexts/LoginModalContext";
+import CreatePost from "../components/CreatePost";
 
 type Frequency = "daily" | "weekly" | "monthly" | "occasionally" | "rare";
 type SolutionType =
@@ -64,6 +65,8 @@ export default function ProblemsPage() {
   const [editingProblemId, setEditingProblemId] = useState<string | null>(null);
   const [deleteTargetProblem, setDeleteTargetProblem] = useState<Problem | null>(null);
   const [deletingProblem, setDeletingProblem] = useState(false);
+  const [isCreateExperimentOpen, setIsCreateExperimentOpen] = useState(false);
+  const [selectedProblemId, setSelectedProblemId] = useState<string | null>(null);
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -267,6 +270,24 @@ export default function ProblemsPage() {
     setDeletingProblem(false);
   };
 
+  const selectedProblemTitle = useMemo(() => {
+    if (!selectedProblemId) return null;
+    return problems.find((problem) => problem.id === selectedProblemId)?.title ?? null;
+  }, [problems, selectedProblemId]);
+
+  const openCreateExperiment = (problemId: string) => {
+    const openModal = () => {
+      setSelectedProblemId(problemId);
+      setActiveProblem(null);
+      setIsCreateExperimentOpen(true);
+    };
+    if (!userId) {
+      openLoginModal(openModal);
+      return;
+    }
+    openModal();
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <div className="mx-auto w-full max-w-6xl px-6 py-8 md:px-10">
@@ -375,14 +396,7 @@ export default function ProblemsPage() {
                       <button
                         type="button"
                         onClick={() => {
-                          const nextHref = `/lab/new?problemId=${problem.id}&problemTitle=${encodeURIComponent(problem.title)}`;
-                          if (!userId) {
-                            openLoginModal(() => {
-                              window.location.assign(nextHref);
-                            });
-                            return;
-                          }
-                          window.location.assign(nextHref);
+                          openCreateExperiment(problem.id);
                         }}
                         className="inline-flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/20"
                       >
@@ -634,17 +648,28 @@ export default function ProblemsPage() {
                   </button>
                 </div>
               )}
-              <Link
-                href={`/lab/new?problemId=${activeProblem.id}&problemTitle=${encodeURIComponent(activeProblem.title)}`}
+              <button
+                type="button"
+                onClick={() => openCreateExperiment(activeProblem.id)}
                 className="inline-flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/20"
               >
                 <Lightbulb className="h-3.5 w-3.5" />
                 Propose Solution
-              </Link>
+              </button>
             </div>
           </div>
         </div>
       )}
+
+      <CreatePost
+        isOpen={isCreateExperimentOpen}
+        onClose={() => {
+          setIsCreateExperimentOpen(false);
+          setSelectedProblemId(null);
+        }}
+        linkedProblemId={selectedProblemId}
+        linkedProblemTitle={selectedProblemTitle}
+      />
 
       {deleteTargetProblem && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4">

@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import Image from "next/image";
 import { createClient } from "@supabase/supabase-js";
 import CollabButton from "../../components/CollabButton";
@@ -254,35 +253,12 @@ export default function ProfilePage({ routeProfileId = null }: Props) {
           <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
             <h2 className="text-lg font-semibold">Work Timeline</h2>
             <div className="mt-4">
-              {experiments && experiments.length > 0 ? (
-                <ResearchTimeline
-                  userId={profileUserId}
-                  currentUserId={authUserId}
-                  initialPosts={experiments}
-                  showAuthor={false}
-                />
-              ) : (
-                <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-800 bg-slate-950/70 p-8 text-center">
-                  <p className="text-base font-semibold text-slate-100">
-                    {isOwnProfile
-                      ? "No experiments published yet."
-                      : "This researcher hasn't shared any experiments yet."}
-                  </p>
-                  <p className="mt-2 max-w-xl text-sm text-slate-400">
-                    {isOwnProfile
-                      ? "Start documenting your ideas and build your public research profile."
-                      : "Check back later for updates."}
-                  </p>
-                  {isOwnProfile && (
-                    <Link
-                      href="/"
-                      className="mt-4 inline-flex items-center justify-center rounded-full border border-cyan-500/50 bg-cyan-500/20 px-5 py-2 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-500/30 hover:border-cyan-400/60"
-                    >
-                      Create First Experiment
-                    </Link>
-                  )}
-                </div>
-              )}
+              <ResearchTimeline
+                userId={profileUserId}
+                currentUserId={authUserId}
+                initialPosts={experiments}
+                showAuthor={false}
+              />
             </div>
           </div>
         </div>

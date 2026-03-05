@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { AlertTriangle, Atom, CirclePlus, FlaskConical, UserRound, Users, X } from "lucide-react";
+import Image from "next/image";
+import { AlertTriangle, CirclePlus, FlaskConical, UserRound, Users, X } from "lucide-react";
 
 type MobileLayoutProps = {
   activeTab: "feed" | "profile";
@@ -25,12 +26,21 @@ export default function MobileLayout({
       <header className="sticky top-0 z-40 border-b border-slate-800 bg-slate-950/95 backdrop-blur">
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-cyan-500/30 bg-cyan-500/10 text-cyan-200">
-              <Atom className="h-5 w-5" />
+            <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl border border-cyan-500/30 bg-cyan-500/10">
+              <Image
+                src="/inolabium-logo.svg"
+                alt="Inolabium logo"
+                width={32}
+                height={32}
+                className="h-8 w-auto object-contain"
+                priority
+              />
             </div>
             <div>
               <p className="text-sm font-semibold">InoLabium</p>
-              <p className="text-[11px] text-slate-400">Open Research Network</p>
+              <p className="max-w-[180px] text-[11px] leading-tight text-slate-400">
+                Open Research & Innovation Network
+              </p>
             </div>
           </div>
           <div className="rounded-full border border-slate-700 bg-slate-900/70 p-1">
