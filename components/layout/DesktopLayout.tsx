@@ -23,16 +23,14 @@ export default function DesktopLayout({
     <div className="mx-auto flex min-h-screen max-w-7xl flex-col md:flex-row">
       <aside className="flex w-full flex-col border-b border-slate-800 bg-slate-950/80 px-6 py-6 md:min-h-screen md:w-72 md:border-b-0 md:border-r">
         <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl border border-cyan-500/30 bg-cyan-500/10">
-            <Image
-              src="/inolabium-logo.svg"
-              alt="Inolabium logo"
-              width={40}
-              height={40}
-              className="h-9 w-auto object-contain"
-              priority
-            />
-          </div>
+          <Image
+            src="/inolabium.png"
+            alt="Inolabium logo"
+            width={40}
+            height={40}
+            className="h-[34px] w-auto object-contain md:h-10"
+            priority
+          />
           <div>
             <p className="text-lg font-semibold">InoLabium</p>
             <p className="text-xs text-slate-400">Open Research & Innovation Network</p>

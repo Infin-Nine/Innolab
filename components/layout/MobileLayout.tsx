@@ -26,16 +26,14 @@ export default function MobileLayout({
       <header className="sticky top-0 z-40 border-b border-slate-800 bg-slate-950/95 backdrop-blur">
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl border border-cyan-500/30 bg-cyan-500/10">
-              <Image
-                src="/inolabium-logo.svg"
-                alt="Inolabium logo"
-                width={32}
-                height={32}
-                className="h-8 w-auto object-contain"
-                priority
-              />
-            </div>
+            <Image
+              src="/inolabium.png"
+              alt="Inolabium logo"
+              width={40}
+              height={40}
+              className="h-[34px] w-auto object-contain md:h-10"
+              priority
+            />
             <div>
               <p className="text-sm font-semibold">InoLabium</p>
               <p className="max-w-[180px] text-[11px] leading-tight text-slate-400">
