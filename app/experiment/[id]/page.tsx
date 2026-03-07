@@ -1,108 +1,101 @@
 "use client";
 
-import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
-import { ArrowLeft } from "lucide-react";
+import { FormEvent, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
-import PostComments from "../../components/PostComments";
 
-type Experiment = {
-  id: string;
-  user_id: string;
-  title: string | null;
-  problem_statement?: string | null;
-  theory?: string | null;
-  approach?: string | null;
-  observations?: string | null;
-  reflection?: string | null;
-  created_at?: string | null;
-};
+export default function ExperimentCreatePage() {
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
-export default function ExperimentDetailPage() {
-  const params = useParams<{ id: string }>();
-  const [post, setPost] = useState<Experiment | null>(null);
-  const [loading, setLoading] = useState(true);
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError(null);
+    setSuccess(null);
 
-  useEffect(() => {
-    let active = true;
-    const load = async () => {
-      const { data } = await supabase
-        .from("posts")
-        .select("id,user_id,title,problem_statement,theory,approach,observations,reflection,created_at")
-        .eq("id", params?.id ?? "")
-        .maybeSingle();
-      if (!active) return;
-      setPost((data as Experiment | null) ?? null);
-      setLoading(false);
-    };
-    void load();
-    return () => {
-      active = false;
-    };
-  }, [params?.id]);
+    if (!title.trim() || !description.trim()) {
+      setError("Please fill in both title and description.");
+      return;
+    }
+
+    setSubmitting(true);
+
+    const { error: insertError } = await supabase.from("experiments").insert({
+      title: title.trim(),
+      description: description.trim(),
+    });
+
+    setSubmitting(false);
+
+    if (insertError) {
+      setError(insertError.message);
+      return;
+    }
+
+    setTitle("");
+    setDescription("");
+    setSuccess("Experiment published successfully.");
+  };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      <div className="mx-auto w-full max-w-3xl px-6 py-8">
-        <Link
-          href="/"
-          className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-4 py-2 text-xs font-semibold text-slate-200 transition hover:border-cyan-400/60 hover:text-cyan-100"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Lab
-        </Link>
-        {loading ? (
-          <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/50 px-4 py-6 text-sm text-slate-400">
-            Loading experiment...
+    <div className="min-h-screen bg-slate-950 px-4 py-10 text-slate-100">
+      <div className="mx-auto w-full max-w-3xl rounded-3xl border border-slate-800 bg-slate-900/60 p-6 md:p-8">
+        <h1 className="text-2xl font-semibold">Add New Experiment</h1>
+        <p className="mt-2 text-sm text-slate-400">
+          Share your experiment details clearly and publish them to the lab.
+        </p>
+
+        <form onSubmit={handleSubmit} className="mt-6 space-y-5">
+          <div className="space-y-2">
+            <label htmlFor="experiment-title" className="text-sm font-medium text-slate-300">
+              Experiment Title
+            </label>
+            <input
+              id="experiment-title"
+              type="text"
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              placeholder="Enter experiment title"
+              className="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
+            />
           </div>
-        ) : !post ? (
-          <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/50 px-4 py-6 text-sm text-slate-400">
-            Experiment not found.
+
+          <div className="space-y-2">
+            <label htmlFor="experiment-description" className="text-sm font-medium text-slate-300">
+              Experiment Description
+            </label>
+            <textarea
+              id="experiment-description"
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              placeholder="Describe the goal, method, and observations..."
+              className="min-h-32 w-full rounded-xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
+            />
           </div>
-        ) : (
-          <article className="mt-6 space-y-6 rounded-3xl border border-slate-800 bg-slate-900/60 p-6">
-            <div>
-              <h1 className="text-2xl font-semibold">{post.title ?? "Untitled Experiment"}</h1>
-              <p className="mt-2 text-xs text-slate-400">
-                {post.created_at ? new Date(post.created_at).toLocaleString() : "Recently"}
-              </p>
-            </div>
-            {post.problem_statement && (
-              <section>
-                <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Problem</p>
-                <p className="mt-2 whitespace-pre-wrap text-sm text-slate-200">{post.problem_statement}</p>
-              </section>
-            )}
-            {post.theory && (
-              <section>
-                <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Context</p>
-                <p className="mt-2 whitespace-pre-wrap text-sm text-slate-200">{post.theory}</p>
-              </section>
-            )}
-            {post.approach && (
-              <section>
-                <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Approach</p>
-                <p className="mt-2 whitespace-pre-wrap text-sm text-slate-200">{post.approach}</p>
-              </section>
-            )}
-            {post.observations && (
-              <section>
-                <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Progress</p>
-                <p className="mt-2 whitespace-pre-wrap text-sm text-slate-200">{post.observations}</p>
-              </section>
-            )}
-            {post.reflection && (
-              <section>
-                <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Notes</p>
-                <p className="mt-2 whitespace-pre-wrap text-sm text-slate-200">{post.reflection}</p>
-              </section>
-            )}
-            <PostComments postId={post.id} postOwnerId={post.user_id} />
-          </article>
-        )}
+
+          {error && (
+            <p className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
+              {error}
+            </p>
+          )}
+
+          {success && (
+            <p className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200">
+              {success}
+            </p>
+          )}
+
+          <button
+            type="submit"
+            disabled={submitting}
+            className="rounded-full border border-cyan-500/40 bg-cyan-500/20 px-5 py-2.5 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-500/30 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {submitting ? "Publishing..." : "Publish Experiment"}
+          </button>
+        </form>
       </div>
     </div>
   );
 }
-

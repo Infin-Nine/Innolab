@@ -15,7 +15,7 @@ export default function CollabLayout({ title, subtitle, children }: Props) {
         <aside className="flex w-full flex-col border-b border-slate-800 bg-slate-950/80 px-6 py-6 md:w-72 md:border-b-0 md:border-r md:sticky md:top-0 md:h-screen">
           <div className="flex items-center gap-3">
             <Image
-              src="/logo3.png"
+              src="/inolabium.png"
               alt="Inolabium logo"
               width={40}
               height={40}

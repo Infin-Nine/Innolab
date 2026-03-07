@@ -13,6 +13,7 @@ import CreatePost from "./components/CreatePost";
 import LabNotebook from "./components/LabNotebook";
 import AboutModal from "./components/AboutModal";
 import AboutSection from "./components/AboutSection";
+import EditProfileModal from "./components/EditProfileForm";
 import ResponsiveLayout from "@/components/layout/ResponsiveLayout";
 import { supabase } from "./lib/supabaseClient";
 import type { Post } from "./types/models";
@@ -20,7 +21,6 @@ import {
   ImageUp,
   MoreHorizontal,
   PencilLine,
-  X,
 } from "lucide-react";
 import { useLoginModal } from "./contexts/LoginModalContext";
 import { useAuth } from "./contexts/AuthContext";
@@ -34,6 +34,7 @@ type Profile = {
   bio?: string | null;
   skills?: string[] | string | null;
   badges?: string[] | string | null;
+  profile_type?: string | null;
 };
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
@@ -57,10 +58,10 @@ export default function Home() {
 
   const [profileData, setProfileData] = useState<Profile | null>(null);
   const [, setProfileLoading] = useState(false);
-  const [profileMessage, setProfileMessage] = useState<string | null>(null);
   const [profileUsername, setProfileUsername] = useState("");
   const [profileBio, setProfileBio] = useState("");
   const [profileSkills, setProfileSkills] = useState("");
+  const [profileType, setProfileType] = useState<"innovator" | "sharer">("innovator");
   const [experimentCount, setExperimentCount] = useState(0);
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
 
@@ -109,13 +110,31 @@ export default function Home() {
         .eq("id", profileUserId)
         .maybeSingle();
       if (!error && data) {
-        setProfileData(data as Profile);
-        setProfileUsername(data.username ?? "");
-        setProfileBio(data.bio ?? "");
-        if (Array.isArray(data.skills)) {
-          setProfileSkills(data.skills.join(", "));
+        const nextProfile = data as Profile;
+        setProfileData(nextProfile);
+        setProfileUsername(nextProfile.username ?? "");
+        setProfileBio(nextProfile.bio ?? "");
+        const typeFromData = String(nextProfile.profile_type ?? "").toLowerCase();
+        if (typeFromData === "sharer" || typeFromData === "problem_sharer") {
+          setProfileType("sharer");
+        } else if (typeFromData === "innovator" || typeFromData === "builder") {
+          setProfileType("innovator");
         } else {
-          setProfileSkills(data.skills ?? "");
+          const parsedBadges = Array.isArray(nextProfile.badges)
+            ? nextProfile.badges.map((b) => String(b).toLowerCase())
+            : String(nextProfile.badges ?? "")
+                .toLowerCase()
+                .split(",")
+                .map((b) => b.trim());
+          if (parsedBadges.some((badge) => badge.includes("sharer"))) setProfileType("sharer");
+          if (parsedBadges.some((badge) => badge.includes("innovator") || badge.includes("builder"))) {
+            setProfileType("innovator");
+          }
+        }
+        if (Array.isArray(nextProfile.skills)) {
+          setProfileSkills(nextProfile.skills.join(", "));
+        } else {
+          setProfileSkills(nextProfile.skills ?? "");
         }
       }
       setProfileLoading(false);
@@ -152,34 +171,50 @@ export default function Home() {
     window.location.assign("/");
   };
 
-  const handleEditProfileSave = async () => {
+  const handleEditProfileSave = async (values?: {
+    profileType: "innovator" | "sharer";
+    displayName: string;
+    about: string;
+    areasOfWork: string;
+  }) => {
     if (!userId) {
-      openLoginModal(() => void handleEditProfileSave());
+      openLoginModal(() => void handleEditProfileSave(values));
       return;
     }
-    setProfileMessage(null);
-    const skills = profileSkills
+    const nextDisplayName = (values?.displayName ?? profileUsername).trim();
+    const nextAbout = (values?.about ?? profileBio).trim();
+    const nextAreas = values?.areasOfWork ?? profileSkills;
+    const nextProfileType = values?.profileType ?? profileType;
+    const badges = nextProfileType === "sharer" ? ["Problem Sharer"] : ["Innovator"];
+
+    const skills = (nextProfileType === "sharer" ? "" : nextAreas)
       .split(",")
       .map((skill) => skill.trim())
       .filter(Boolean);
     const { error } = await supabase
       .from("profiles")
       .update({
-        username: profileUsername.trim(),
-        bio: profileBio.trim(),
+        username: nextDisplayName,
+        bio: nextAbout,
         skills,
+        badges,
       })
       .eq("id", userId);
     if (error) {
-      setProfileMessage(error.message);
+      console.error("Failed to update profile:", error.message);
       return;
     }
     setProfileData((prev) => ({
       ...(prev ?? { id: userId }),
-      username: profileUsername.trim(),
-      bio: profileBio.trim(),
+      username: nextDisplayName,
+      bio: nextAbout,
       skills,
+      badges,
     }));
+    setProfileType(nextProfileType);
+    setProfileUsername(nextDisplayName);
+    setProfileBio(nextAbout);
+    setProfileSkills(nextAreas);
     setIsEditProfileOpen(false);
   };
 
@@ -213,6 +248,45 @@ export default function Home() {
     return [];
   };
 
+  const formatBadges = (profile?: Profile | null) => {
+    if (!profile) return [];
+    if (Array.isArray(profile.badges)) {
+      return profile.badges.map((b) => String(b).trim()).filter(Boolean);
+    }
+    if (typeof profile.badges === "string") {
+      const raw = profile.badges.trim();
+      if (!raw) return [];
+      if (raw.startsWith("[") || raw.startsWith("{")) {
+        try {
+          const parsed = JSON.parse(raw);
+          const list = Array.isArray(parsed) ? parsed : Object.values(parsed ?? {});
+          return list.map((b) => String(b).trim()).filter(Boolean);
+        } catch {
+          const cleaned = raw.replace(/[\[\]"']/g, "");
+          return cleaned
+            .split(",")
+            .map((part) => part.trim())
+            .filter(Boolean);
+        }
+      }
+      return raw
+        .split(",")
+        .map((part) => part.trim())
+        .filter(Boolean);
+    }
+    return [];
+  };
+
+  const resolveProfileType = (profile?: Profile | null): "innovator" | "sharer" => {
+    const rawType = String(profile?.profile_type ?? "").trim().toLowerCase();
+    if (rawType === "sharer" || rawType === "problem_sharer") return "sharer";
+    if (rawType === "innovator" || rawType === "builder") return "innovator";
+    const badges = formatBadges(profile).map((badge) => badge.toLowerCase());
+    if (badges.some((badge) => badge.includes("sharer"))) return "sharer";
+    if (badges.some((badge) => badge.includes("innovator") || badge.includes("builder"))) return "innovator";
+    return profileType;
+  };
+
   const getDisplayName = (profile?: Profile | null) =>
     profile?.username?.trim() ||
     profile?.full_name?.trim() ||
@@ -225,6 +299,8 @@ export default function Home() {
   };
 
   const aboutText = profileData?.bio?.trim() || "Work description not added yet.";
+  const resolvedProfileType = resolveProfileType(profileData);
+  const visibleSkills = profileData && resolvedProfileType === "innovator" ? formatSkills(profileData) : [];
   const openNewExperimentModal = () => {
     if (!userId) {
       openLoginModal(() => {
@@ -335,26 +411,33 @@ export default function Home() {
                   </div>
                 )}
                 <div>
-                  <p className={compact ? "text-lg font-semibold text-slate-100" : "text-xl font-semibold text-slate-100"}>
-                    {getDisplayName(profileData)}
-                  </p>
-                  <AboutSection aboutText={aboutText} onReadMore={() => setIsAboutModalOpen(true)} />
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {profileData && formatSkills(profileData).length ? (
-                      formatSkills(profileData)
-                        .slice(0, 3)
-                        .map((skill) => (
-                          <span
-                            key={skill}
-                            className="rounded-full border border-slate-700 bg-slate-800/60 px-3 py-1 text-xs text-slate-200"
-                          >
-                            {skill}
-                          </span>
-                        ))
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className={compact ? "text-lg font-semibold text-slate-100" : "text-xl font-semibold text-slate-100"}>
+                      {getDisplayName(profileData)}
+                    </p>
+                    {resolvedProfileType === "sharer" ? (
+                      <span className="rounded-full border border-blue-800 bg-blue-900/50 px-2 py-1 text-xs text-blue-400">
+                        Problem Sharer
+                      </span>
                     ) : (
-                      <span className="text-xs text-slate-500">Role not specified.</span>
+                      <span className="rounded-full border border-emerald-800 bg-emerald-900/50 px-2 py-1 text-xs text-emerald-400">
+                        Innovator
+                      </span>
                     )}
                   </div>
+                  <AboutSection aboutText={aboutText} onReadMore={() => setIsAboutModalOpen(true)} />
+                  {resolvedProfileType === "innovator" && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {visibleSkills.slice(0, 3).map((skill) => (
+                        <span
+                          key={skill}
+                          className="rounded-full border border-slate-700 bg-slate-800/60 px-3 py-1 text-xs text-slate-200"
+                        >
+                          {skill}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                   <div className="mt-3 text-xs text-slate-500">
                     <p>
                       Experiments: {experimentCount}
@@ -378,7 +461,6 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={() => {
-                    setProfileMessage(null);
                     setIsEditProfileOpen(true);
                   }}
                   className={`flex items-center justify-center gap-2 rounded-full border border-slate-700 bg-slate-900 font-semibold text-slate-200 transition hover:border-slate-500 hover:text-slate-100 ${
@@ -485,79 +567,17 @@ export default function Home() {
 
       {isEditProfileOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="flex w-full max-w-lg max-h-[90vh] flex-col overflow-y-auto rounded-3xl border border-slate-800 bg-slate-950 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs uppercase tracking-[0.3em] text-emerald-400">
-                  Edit Profile
-                </p>
-                <p className="text-base font-semibold text-slate-100">
-                  Edit Your Profile
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsEditProfileOpen(false)}
-                className="rounded-full border border-slate-700 p-2 text-slate-200 transition hover:border-emerald-400/60 hover:text-emerald-100"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="mt-4 flex-1 space-y-4 overflow-y-auto pr-1 pb-4">
-              <div className="space-y-1">
-                <label className="text-xs text-slate-400">Display Name</label>
-                <p className="text-xs text-slate-500">
-                  The name others will see when reading your work.
-                </p>
-                <input
-                  value={profileUsername}
-                  onChange={(event) => setProfileUsername(event.target.value)}
-                  className="w-full rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
-                  placeholder="Nova Innovator"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs text-slate-400">About</label>
-                <textarea
-                  value={profileBio}
-                  onChange={(event) => setProfileBio(event.target.value)}
-                  className="min-h-[100px] w-full rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
-                  placeholder="Briefly describe what you work on and the kind of problems you care about."
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs text-slate-400">Areas of Work</label>
-                <input
-                  value={profileSkills}
-                  onChange={(event) => setProfileSkills(event.target.value)}
-                  className="w-full rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
-                  placeholder="How do you usually contribute?"
-                />
-              </div>
-              {profileMessage && (
-                <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-100">
-                  {profileMessage}
-                </div>
-              )}
-              <div className="flex items-center justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setIsEditProfileOpen(false)}
-                  className="rounded-full border border-slate-700 px-4 py-2 text-xs font-semibold text-slate-300 transition hover:border-slate-400 hover:text-slate-100"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleEditProfileSave}
-                  className="flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-500/20 px-4 py-2 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/30"
-                >
-                  <PencilLine className="h-4 w-4" />
-                  Save Profile
-                </button>
-              </div>
-            </div>
-          </div>
+          <EditProfileModal
+            initialValues={{
+              profileType,
+              displayName: profileUsername,
+              about: profileBio,
+              areasOfWork: profileSkills,
+            }}
+            onClose={() => setIsEditProfileOpen(false)}
+            onCancel={() => setIsEditProfileOpen(false)}
+            onSave={(values) => void handleEditProfileSave(values)}
+          />
         </div>
       )}
       <AboutModal

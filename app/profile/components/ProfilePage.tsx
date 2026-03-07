@@ -18,6 +18,9 @@ type Profile = {
   email?: string | null;
   avatar_url?: string | null;
   bio?: string | null;
+  role?: string | null;
+  profile_type?: string | null;
+  badges?: string[] | string | null;
   skills?: string[] | string | null;
 };
 
@@ -62,6 +65,58 @@ const formatSkills = (profile: Profile | null) => {
 
 const getDisplayName = (profile?: Profile | null) =>
   profile?.username?.trim() || profile?.full_name?.trim() || profile?.email?.trim() || "Innovator";
+
+const formatBadges = (profile?: Profile | null) => {
+  if (!profile) return [];
+  if (Array.isArray(profile.badges)) {
+    return profile.badges.map((badge) => String(badge).trim()).filter(Boolean);
+  }
+  if (typeof profile.badges === "string") {
+    const raw = profile.badges.trim();
+    if (!raw) return [];
+    if (raw.startsWith("[") || raw.startsWith("{")) {
+      try {
+        const parsed = JSON.parse(raw);
+        const list = Array.isArray(parsed) ? parsed : Object.values(parsed ?? {});
+        return list.map((badge) => String(badge).trim()).filter(Boolean);
+      } catch {
+        const cleaned = raw.replace(/[\[\]"']/g, "");
+        return cleaned
+          .split(",")
+          .map((badge) => badge.trim())
+          .filter(Boolean);
+      }
+    }
+    return raw
+      .split(",")
+      .map((badge) => badge.trim())
+      .filter(Boolean);
+  }
+  return [];
+};
+
+const getRoleLabel = (profile?: Profile | null) => {
+  const explicitRole = profile?.role?.trim();
+  if (explicitRole) return explicitRole;
+
+  const rawType = String(profile?.profile_type ?? "").trim().toLowerCase();
+  if (rawType === "sharer") return "Problem Sharer";
+  if (rawType === "innovator") return "Innovator";
+  const badge = formatBadges(profile)[0];
+  if (badge) return badge;
+  return null;
+};
+
+const getRoleBadgeClassName = (roleLabel: string | null) => {
+  const normalized = String(roleLabel ?? "").trim().toLowerCase();
+  if (normalized.includes("sharer")) {
+    return "rounded-full border border-blue-500/40 bg-blue-500/10 px-3 py-1 text-xs font-semibold text-blue-200";
+  }
+  if (normalized.includes("innovator") || normalized.includes("builder")) {
+    return "rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-200";
+  }
+  return "rounded-full border border-cyan-500/40 bg-cyan-500/10 px-3 py-1 text-xs font-semibold text-cyan-200";
+};
 
 const getInitials = (name: string) => {
   const parts = name.split(" ").filter(Boolean);
@@ -175,6 +230,8 @@ export default function ProfilePage({ routeProfileId = null }: Props) {
 
   const skills = useMemo(() => formatSkills(profile), [profile]);
   const aboutText = profile?.bio?.trim() || "This innovator has not added a bio yet.";
+  const roleLabel = getRoleLabel(profile);
+  const roleBadgeClassName = getRoleBadgeClassName(roleLabel);
 
   if (!authResolved || !profileUserId || loadingProfile) {
     return (
@@ -221,7 +278,14 @@ export default function ProfilePage({ routeProfileId = null }: Props) {
                   </div>
                 )}
                 <div>
-                  <p className="text-2xl font-semibold text-slate-100">{getDisplayName(profile)}</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-2xl font-semibold text-slate-100">{getDisplayName(profile)}</p>
+                    {roleLabel && (
+                      <span className={roleBadgeClassName}>
+                        {roleLabel}
+                      </span>
+                    )}
+                  </div>
                   <AboutSection aboutText={aboutText} onReadMore={() => setIsAboutModalOpen(true)} />
                   <div className="mt-2 flex flex-wrap gap-2">
                     {skills.length ? (

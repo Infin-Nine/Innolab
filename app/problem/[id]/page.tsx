@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ArrowLeft, Lightbulb } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient";
@@ -21,9 +21,11 @@ type Problem = {
 };
 
 export default function ProblemDetailPage() {
+  const router = useRouter();
   const params = useParams<{ id: string }>();
   const [problem, setProblem] = useState<Problem | null>(null);
   const [loading, setLoading] = useState(true);
+  const [userId, setUserId] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -44,6 +46,23 @@ export default function ProblemDetailPage() {
       active = false;
     };
   }, [params?.id]);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadUser = async () => {
+      const { data } = await supabase.auth.getSession();
+      if (!mounted) return;
+      setUserId(data.session?.user.id ?? null);
+    };
+    void loadUser();
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUserId(session?.user.id ?? null);
+    });
+    return () => {
+      mounted = false;
+      data.subscription.unsubscribe();
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
@@ -105,17 +124,28 @@ export default function ProblemDetailPage() {
                 <p className="mt-2 whitespace-pre-wrap text-sm text-slate-200">{problem.additional_context}</p>
               </section>
             )}
-            <Link
-              href={`/lab/new?problemId=${problem.id}&problemTitle=${encodeURIComponent(problem.title)}`}
+            {!userId && (
+              <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+                Sign in to propose a solution.
+              </p>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                if (!userId) {
+                  router.push("/login");
+                  return;
+                }
+                router.push(`/lab/new?problemId=${problem.id}&problemTitle=${encodeURIComponent(problem.title)}`);
+              }}
               className="inline-flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/20"
             >
               <Lightbulb className="h-3.5 w-3.5" />
               Propose Solution
-            </Link>
+            </button>
           </article>
         )}
       </div>
     </div>
   );
 }
-

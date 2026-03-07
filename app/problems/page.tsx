@@ -2,33 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
-import { ArrowLeft, Lightbulb, X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, X } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useLoginModal } from "../contexts/LoginModalContext";
 import CreatePost from "../components/CreatePost";
-
-type Frequency = "daily" | "weekly" | "monthly" | "occasionally" | "rare";
-type SolutionType =
-  | "software"
-  | "hardware"
-  | "service"
-  | "policy"
-  | "research"
-  | "education";
-
-type Problem = {
-  id: string;
-  user_id: string;
-  title: string;
-  description: string;
-  affected_group: string;
-  frequency: Frequency | string;
-  current_workaround: string;
-  solution_type: SolutionType | string;
-  expected_outcome?: string | null;
-  additional_context?: string | null;
-  created_at?: string | null;
-};
+import ProblemCard from "../components/problems/ProblemCard";
+import ProblemDetailModal from "../components/problems/ProblemDetailModal";
+import type { Frequency, Problem, SolutionType } from "../components/problems/types";
 
 type ProblemAuthor = {
   id: string;
@@ -44,15 +25,8 @@ const genericTitleSet = new Set([
   "test problem",
 ]);
 
-const frequencyBadge: Record<string, string> = {
-  daily: "border-rose-400/60 bg-rose-500/20 text-rose-100",
-  weekly: "border-amber-400/60 bg-amber-500/20 text-amber-100",
-  monthly: "border-cyan-400/60 bg-cyan-500/20 text-cyan-100",
-  occasionally: "border-slate-500/70 bg-slate-700/50 text-slate-100",
-  rare: "border-slate-600/70 bg-slate-800/60 text-slate-200",
-};
-
 export default function ProblemsPage() {
+  const router = useRouter();
   const [userId, setUserId] = useState<string | null>(null);
   const { openLoginModal } = useLoginModal();
   const [loading, setLoading] = useState(true);
@@ -276,16 +250,13 @@ export default function ProblemsPage() {
   }, [problems, selectedProblemId]);
 
   const openCreateExperiment = (problemId: string) => {
-    const openModal = () => {
-      setSelectedProblemId(problemId);
-      setActiveProblem(null);
-      setIsCreateExperimentOpen(true);
-    };
     if (!userId) {
-      openLoginModal(openModal);
+      router.push("/login");
       return;
     }
-    openModal();
+    setSelectedProblemId(problemId);
+    setActiveProblem(null);
+    setIsCreateExperimentOpen(true);
   };
 
   return (
@@ -346,74 +317,16 @@ export default function ProblemsPage() {
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {sortedProblems.map((problem) => {
-                const freqKey = String(problem.frequency ?? "").toLowerCase();
                 return (
-                  <article
+                  <ProblemCard
                     key={problem.id}
-                    className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4"
-                  >
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-base font-semibold text-slate-100">{problem.title}</h3>
-                    </div>
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <span
-                        className={`rounded-full border px-2 py-1 text-[11px] font-semibold uppercase tracking-wide ${
-                          frequencyBadge[freqKey] ?? "border-slate-600/70 bg-slate-800/60 text-slate-200"
-                        }`}
-                      >
-                        {problem.frequency}
-                      </span>
-                      <span className="rounded-full border border-slate-700 bg-slate-950/70 px-2 py-1 text-[11px] font-semibold text-slate-200">
-                        {problem.affected_group}
-                      </span>
-                    </div>
-                    <p className="mt-3 text-sm text-slate-300 [display:-webkit-box] overflow-hidden [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">
-                      {problem.description}
-                    </p>
-                    <p className="mt-3 text-xs text-slate-400">
-                      Submitted{" "}
-                      {problem.created_at ? new Date(problem.created_at).toLocaleString() : "recently"}
-                    </p>
-                    <p className="mt-1 text-xs text-slate-400">
-                      By{" "}
-                      <Link
-                        href={`/profile/${problem.user_id}`}
-                        className="font-semibold text-cyan-300 transition hover:text-cyan-100 hover:underline"
-                      >
-                        {getAuthorDisplayName(problem.user_id)}
-                      </Link>
-                    </p>
-                    <div className="mt-4 flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          window.location.assign(`/problem/${problem.id}`);
-                        }}
-                        className="rounded-full border border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-200 transition hover:border-cyan-400/60 hover:text-cyan-100"
-                      >
-                        View Details
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          openCreateExperiment(problem.id);
-                        }}
-                        className="inline-flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/20"
-                      >
-                        <Lightbulb className="h-3.5 w-3.5" />
-                        Propose Solution
-                      </button>
-                      {problem.user_id === userId && (
-                        <button
-                          type="button"
-                          onClick={() => requestDeleteProblem(problem)}
-                          className="rounded-full border border-rose-500/40 bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-100 transition hover:bg-rose-500/20"
-                        >
-                          Delete
-                        </button>
-                      )}
-                    </div>
-                  </article>
+                    problem={problem}
+                    isOwner={problem.user_id === userId}
+                    authorName={getAuthorDisplayName(problem.user_id)}
+                    onOpen={() => setActiveProblem(problem)}
+                    onProposeSolution={() => openCreateExperiment(problem.id)}
+                    onDelete={() => requestDeleteProblem(problem)}
+                  />
                 );
               })}
             </div>
@@ -560,106 +473,16 @@ export default function ProblemsPage() {
         </div>
       )}
 
-      {activeProblem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="w-full max-w-2xl overflow-hidden rounded-3xl border border-slate-800 bg-slate-900">
-            <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
-              <h2 className="text-lg font-semibold text-slate-100">Problem Details</h2>
-              <button
-                type="button"
-                onClick={() => setActiveProblem(null)}
-                className="rounded-full border border-slate-700 p-2 text-slate-300 transition hover:border-slate-500"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="max-h-[80vh] space-y-4 overflow-y-auto px-5 py-5">
-              <div>
-                <p className="text-xs text-slate-400">Title</p>
-                <p className="text-base font-semibold text-slate-100">{activeProblem.title}</p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <span
-                  className={`rounded-full border px-2 py-1 text-[11px] font-semibold uppercase tracking-wide ${
-                    frequencyBadge[String(activeProblem.frequency).toLowerCase()] ??
-                    "border-slate-600/70 bg-slate-800/60 text-slate-200"
-                  }`}
-                >
-                  {activeProblem.frequency}
-                </span>
-                <span className="rounded-full border border-slate-700 bg-slate-950/70 px-2 py-1 text-[11px] font-semibold text-slate-200">
-                  {activeProblem.affected_group}
-                </span>
-              </div>
-              <div>
-                <p className="text-xs text-slate-400">Description</p>
-                <p className="text-sm text-slate-200">{activeProblem.description}</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-400">Current Workaround</p>
-                <p className="text-sm text-slate-200">{activeProblem.current_workaround}</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-400">Preferred Solution Type</p>
-                <p className="text-sm text-slate-200">{activeProblem.solution_type}</p>
-              </div>
-              {activeProblem.expected_outcome && (
-                <div>
-                  <p className="text-xs text-slate-400">Expected Outcome</p>
-                  <p className="text-sm text-slate-200">{activeProblem.expected_outcome}</p>
-                </div>
-              )}
-              {activeProblem.additional_context && (
-                <div>
-                  <p className="text-xs text-slate-400">Additional Context</p>
-                  <p className="text-sm text-slate-200">{activeProblem.additional_context}</p>
-                </div>
-              )}
-              <p className="text-xs text-slate-400">
-                Submitted{" "}
-                {activeProblem.created_at
-                  ? new Date(activeProblem.created_at).toLocaleString()
-                  : "recently"}
-              </p>
-              <p className="text-xs text-slate-400">
-                By{" "}
-                <Link
-                  href={`/profile/${activeProblem.user_id}`}
-                  className="font-semibold text-cyan-300 transition hover:text-cyan-100 hover:underline"
-                >
-                  {getAuthorDisplayName(activeProblem.user_id)}
-                </Link>
-              </p>
-              {activeProblem.user_id === userId && (
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => openEditModal(activeProblem)}
-                    className="rounded-full border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-100 transition hover:bg-cyan-500/20"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => requestDeleteProblem(activeProblem)}
-                    className="rounded-full border border-rose-500/40 bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-100 transition hover:bg-rose-500/20"
-                  >
-                    Delete
-                  </button>
-                </div>
-              )}
-              <button
-                type="button"
-                onClick={() => openCreateExperiment(activeProblem.id)}
-                className="inline-flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/20"
-              >
-                <Lightbulb className="h-3.5 w-3.5" />
-                Propose Solution
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ProblemDetailModal
+        problem={activeProblem}
+        isOwner={!!(activeProblem && activeProblem.user_id === userId)}
+        isAuthenticated={!!userId}
+        authorName={activeProblem ? getAuthorDisplayName(activeProblem.user_id) : "Member"}
+        onClose={() => setActiveProblem(null)}
+        onEdit={() => activeProblem && openEditModal(activeProblem)}
+        onDelete={() => activeProblem && requestDeleteProblem(activeProblem)}
+        onProposeSolution={() => activeProblem && openCreateExperiment(activeProblem.id)}
+      />
 
       <CreatePost
         isOpen={isCreateExperimentOpen}

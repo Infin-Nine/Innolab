@@ -14,7 +14,7 @@ export default function AboutSection({
   onReadMore,
   className = "",
 }: AboutSectionProps) {
-  const aboutPreviewRef = useRef<HTMLParagraphElement | null>(null);
+  const aboutPreviewRef = useRef<HTMLButtonElement | null>(null);
   const [isOverflowing, setIsOverflowing] = useState(false);
 
   useEffect(() => {
@@ -40,12 +40,15 @@ export default function AboutSection({
   return (
     <div className={`mt-2 max-w-[34rem] ${className}`.trim()}>
       <p className="text-[10px] uppercase tracking-[0.3em] text-slate-500">About</p>
-      <p
+      <button
+        type="button"
         ref={aboutPreviewRef}
-        className="mt-2 text-sm leading-relaxed text-slate-300 [display:-webkit-box] overflow-hidden [-webkit-box-orient:vertical] [-webkit-line-clamp:2] whitespace-pre-line"
+        onClick={onReadMore}
+        className="mt-2 w-full text-left text-sm leading-relaxed text-slate-300 [display:-webkit-box] overflow-hidden [-webkit-box-orient:vertical] [-webkit-line-clamp:2] whitespace-pre-line transition hover:text-slate-200"
+        aria-label="Open full about description"
       >
         {aboutText}
-      </p>
+      </button>
       {isOverflowing && (
         <button
           type="button"
@@ -59,4 +62,3 @@ export default function AboutSection({
     </div>
   );
 }
-
