@@ -99,7 +99,7 @@ export default function EditProfileModal({
             </span>
           ) : (
             <span className="bg-emerald-900/50 text-emerald-400 text-xs px-2 py-1 rounded-full border border-emerald-800">
-              Innovator
+              Builder
             </span>
           )}
         </div>

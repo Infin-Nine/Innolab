@@ -185,7 +185,7 @@ export default function Home() {
     const nextAbout = (values?.about ?? profileBio).trim();
     const nextAreas = values?.areasOfWork ?? profileSkills;
     const nextProfileType = values?.profileType ?? profileType;
-    const badges = nextProfileType === "sharer" ? ["Problem Sharer"] : ["Innovator"];
+    const badges = nextProfileType === "sharer" ? ["Problem Sharer"] : ["Builder"];
 
     const skills = (nextProfileType === "sharer" ? "" : nextAreas)
       .split(",")
@@ -421,7 +421,7 @@ export default function Home() {
                       </span>
                     ) : (
                       <span className="rounded-full border border-emerald-800 bg-emerald-900/50 px-2 py-1 text-xs text-emerald-400">
-                        Innovator
+                        Builder
                       </span>
                     )}
                   </div>

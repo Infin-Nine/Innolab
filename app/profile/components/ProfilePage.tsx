@@ -97,13 +97,15 @@ const formatBadges = (profile?: Profile | null) => {
 
 const getRoleLabel = (profile?: Profile | null) => {
   const explicitRole = profile?.role?.trim();
-  if (explicitRole) return explicitRole;
+  if (explicitRole) {
+    return explicitRole.toLowerCase() === "innovator" ? "Builder" : explicitRole;
+  }
 
   const rawType = String(profile?.profile_type ?? "").trim().toLowerCase();
   if (rawType === "sharer") return "Problem Sharer";
-  if (rawType === "innovator") return "Innovator";
+  if (rawType === "innovator") return "Builder";
   const badge = formatBadges(profile)[0];
-  if (badge) return badge;
+  if (badge) return badge.trim().toLowerCase() === "innovator" ? "Builder" : badge;
   return null;
 };
 
