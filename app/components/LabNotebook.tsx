@@ -446,7 +446,7 @@ export default function LabNotebook({ refreshKey = 0, onPostsLoaded, compact = f
     return (
       <article
         key={post.id}
-        className={`rounded-3xl border border-slate-800 bg-slate-900/60 ${compact ? "p-4" : "p-6"}`}
+        className={`rounded-3xl border border-slate-800 bg-slate-900/60 ${compact ? "p-4" : "p-4 sm:p-6"}`}
       >
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
@@ -493,7 +493,7 @@ export default function LabNotebook({ refreshKey = 0, onPostsLoaded, compact = f
                   Solving Problem: {linkedProblemTitle}
                 </p>
               )}
-              {post.title ?? "Untitled Experiment"}
+              {post.title ?? "Untitled Solution"}
             </button>
             {isActiveContributor && (
               <span className="mt-2 block w-fit rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-100">
@@ -540,22 +540,60 @@ export default function LabNotebook({ refreshKey = 0, onPostsLoaded, compact = f
                 )}
               </div>
             ) : (
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => openEdit(post.id)}
-                  className="rounded-full border border-slate-700 px-3 py-1 text-xs font-semibold text-slate-200 transition hover:border-cyan-400/60 hover:text-cyan-100"
-                >
-                  Edit
-                </button>
-                <button
-                  type="button"
-                  onClick={() => requestDeletePost(post.id)}
-                  className="rounded-full border border-rose-500/40 px-3 py-1 text-xs font-semibold text-rose-100 transition hover:border-rose-400/60 hover:text-rose-50"
-                >
-                  Delete
-                </button>
-              </div>
+              <>
+                <div className="relative sm:hidden" data-owner-menu>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setActionMenuPostId((prev) => (prev === post.id ? null : post.id))
+                    }
+                    className="inline-flex min-h-11 items-center justify-center rounded-full border border-slate-700 px-3 text-slate-200 transition hover:border-cyan-400/60 hover:text-cyan-100"
+                    aria-label="Open post actions"
+                  >
+                    <MoreHorizontal className="h-4 w-4" />
+                  </button>
+                  {actionMenuPostId === post.id && (
+                    <div className="absolute right-0 top-full z-[70] mt-2 w-36 rounded-2xl border border-slate-700 bg-slate-950 p-1 shadow-xl">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActionMenuPostId(null);
+                          openEdit(post.id);
+                        }}
+                        className="flex min-h-11 w-full items-center rounded-xl px-3 text-left text-xs font-semibold text-slate-100 transition hover:bg-slate-800"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActionMenuPostId(null);
+                          requestDeletePost(post.id);
+                        }}
+                        className="flex min-h-11 w-full items-center rounded-xl px-3 text-left text-xs font-semibold text-rose-200 transition hover:bg-rose-500/10"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <div className="hidden items-center gap-2 sm:flex">
+                  <button
+                    type="button"
+                    onClick={() => openEdit(post.id)}
+                    className="rounded-full border border-slate-700 px-3 py-1 text-xs font-semibold text-slate-200 transition hover:border-cyan-400/60 hover:text-cyan-100"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => requestDeletePost(post.id)}
+                    className="rounded-full border border-rose-500/40 px-3 py-1 text-xs font-semibold text-rose-100 transition hover:border-rose-400/60 hover:text-rose-50"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </>
             ))}
         </div>
         <div className={`${compact ? "mt-3" : "mt-6"} space-y-4`}>
@@ -634,7 +672,7 @@ export default function LabNotebook({ refreshKey = 0, onPostsLoaded, compact = f
           )}
           {lastFetchCount !== null && lastFetchCount === 0 && !feedError && (
             <div className="rounded-2xl border border-slate-800 bg-slate-900/50 px-4 py-6 text-sm text-slate-400">
-              No experiments yet.
+              No solutions yet.
             </div>
           )}
           {sections.collab.length > 0 && (
@@ -645,13 +683,13 @@ export default function LabNotebook({ refreshKey = 0, onPostsLoaded, compact = f
           )}
           {sections.discuss.length > 0 && (
             <div className="space-y-3">
-              <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Recent Work</p>
+              <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Solutions in Progress</p>
               {sections.discuss.map(renderFeedCard)}
             </div>
           )}
           {sections.explore.length > 0 && (
             <div className="space-y-3">
-              <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Latest Experiments</p>
+              <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Latest Solutions</p>
               {sections.explore.map(renderFeedCard)}
             </div>
           )}
@@ -662,7 +700,7 @@ export default function LabNotebook({ refreshKey = 0, onPostsLoaded, compact = f
                 onClick={() => setPage((p) => p + 1)}
                 className="rounded-full border border-slate-700 px-4 py-2 text-xs font-semibold text-slate-200 transition hover:border-cyan-400/60 hover:text-cyan-100"
               >
-                Load More Research
+                Load More Solutions
               </button>
             </div>
           )}

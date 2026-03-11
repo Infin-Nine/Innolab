@@ -1,2 +1,1 @@
-export { default } from "../lab/new/page";
-
+export { default } from "../solutions/new/page";

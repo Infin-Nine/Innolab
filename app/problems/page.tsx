@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, X } from "lucide-react";
+import { X } from "lucide-react";
+import DashboardLayout from "@/components/layout/DashboardLayout";
 import { supabase } from "../lib/supabaseClient";
 import { useLoginModal } from "../contexts/LoginModalContext";
 import CreatePost from "../components/CreatePost";
@@ -41,6 +41,7 @@ export default function ProblemsPage() {
   const [deletingProblem, setDeletingProblem] = useState(false);
   const [isCreateExperimentOpen, setIsCreateExperimentOpen] = useState(false);
   const [selectedProblemId, setSelectedProblemId] = useState<string | null>(null);
+  const [validatingProblemId, setValidatingProblemId] = useState<string | null>(null);
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -52,31 +53,76 @@ export default function ProblemsPage() {
   const [expectedOutcome, setExpectedOutcome] = useState("");
   const [additionalContext, setAdditionalContext] = useState("");
 
-  const fetchProblems = useCallback(async () => {
+  const fetchProblems = useCallback(async (viewerId?: string | null) => {
     const { data: rows } = await supabase
       .from("problems")
       .select(
         "id, user_id, title, description, affected_group, frequency, current_workaround, solution_type, expected_outcome, additional_context, created_at"
       )
       .order("created_at", { ascending: false });
-    const nextProblems = (rows as Problem[]) ?? [];
-    setProblems(nextProblems);
+    const nextProblems = ((rows as Problem[]) ?? []).map((problem) => ({
+      ...problem,
+      validation_count: 0,
+      comment_count: 0,
+      is_validated: false,
+    }));
 
     const userIds = Array.from(new Set(nextProblems.map((problem) => problem.user_id).filter(Boolean)));
     if (!userIds.length) {
       setAuthors({});
+    } else {
+      const { data: profileRows } = await supabase
+        .from("profiles")
+        .select("id, username")
+        .in("id", userIds);
+      const authorMap: Record<string, ProblemAuthor> = {};
+      (profileRows as ProblemAuthor[] | null)?.forEach((profile) => {
+        if (!profile?.id) return;
+        authorMap[profile.id] = profile;
+      });
+      setAuthors(authorMap);
+    }
+
+    const problemIds = nextProblems.map((problem) => problem.id);
+    if (!problemIds.length) {
+      setProblems(nextProblems);
       return;
     }
-    const { data: profileRows } = await supabase
-      .from("profiles")
-      .select("id, username")
-      .in("id", userIds);
-    const authorMap: Record<string, ProblemAuthor> = {};
-    (profileRows as ProblemAuthor[] | null)?.forEach((profile) => {
-      if (!profile?.id) return;
-      authorMap[profile.id] = profile;
+
+    const [{ data: validationRows }, { data: commentRows }, { data: userValidationRows }] = await Promise.all([
+      supabase.from("problem_validations").select("problem_id").in("problem_id", problemIds),
+      supabase.from("problem_comments").select("problem_id").in("problem_id", problemIds),
+      viewerId
+        ? supabase
+            .from("problem_validations")
+            .select("problem_id")
+            .in("problem_id", problemIds)
+            .eq("user_id", viewerId)
+        : Promise.resolve({ data: [] as Array<{ problem_id: string }> }),
+    ]);
+
+    const validationCounts = new Map<string, number>();
+    ((validationRows as Array<{ problem_id: string }> | null) ?? []).forEach((row) => {
+      validationCounts.set(row.problem_id, (validationCounts.get(row.problem_id) ?? 0) + 1);
     });
-    setAuthors(authorMap);
+
+    const commentCounts = new Map<string, number>();
+    ((commentRows as Array<{ problem_id: string }> | null) ?? []).forEach((row) => {
+      commentCounts.set(row.problem_id, (commentCounts.get(row.problem_id) ?? 0) + 1);
+    });
+
+    const validatedProblemIds = new Set(
+      ((userValidationRows as Array<{ problem_id: string }> | null) ?? []).map((row) => row.problem_id)
+    );
+
+    setProblems(
+      nextProblems.map((problem) => ({
+        ...problem,
+        validation_count: validationCounts.get(problem.id) ?? 0,
+        comment_count: commentCounts.get(problem.id) ?? 0,
+        is_validated: validatedProblemIds.has(problem.id),
+      }))
+    );
   }, []);
 
   const getAuthorDisplayName = useCallback(
@@ -102,20 +148,122 @@ export default function ProblemsPage() {
     const initialize = async () => {
       const { data } = await supabase.auth.getSession();
       if (!mounted) return;
-      setUserId(data.session?.user.id ?? null);
-      await fetchProblems();
+      const nextUserId = data.session?.user.id ?? null;
+      setUserId(nextUserId);
+      await fetchProblems(nextUserId);
       if (!mounted) return;
       setLoading(false);
     };
     initialize();
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUserId(session?.user.id ?? null);
+      const nextUserId = session?.user.id ?? null;
+      setUserId(nextUserId);
+      void fetchProblems(nextUserId);
     });
     return () => {
       mounted = false;
       data.subscription.unsubscribe();
     };
   }, [fetchProblems]);
+
+  const updateProblemStats = useCallback(
+    (problemId: string, stats: { validationCount?: number; commentCount?: number; isValidated?: boolean }) => {
+      setProblems((prev) =>
+        prev.map((problem) =>
+          problem.id === problemId
+            ? {
+                ...problem,
+                validation_count: stats.validationCount ?? problem.validation_count ?? 0,
+                comment_count: stats.commentCount ?? problem.comment_count ?? 0,
+                is_validated: stats.isValidated ?? problem.is_validated ?? false,
+              }
+            : problem
+        )
+      );
+      setActiveProblem((prev) =>
+        prev && prev.id === problemId
+          ? {
+              ...prev,
+              validation_count: stats.validationCount ?? prev.validation_count ?? 0,
+              comment_count: stats.commentCount ?? prev.comment_count ?? 0,
+              is_validated: stats.isValidated ?? prev.is_validated ?? false,
+            }
+          : prev
+      );
+    },
+    []
+  );
+
+  const handleValidate = useCallback(
+    async (problemId: string) => {
+      if (validatingProblemId === problemId) {
+        return;
+      }
+
+      if (!userId) {
+        openLoginModal();
+        return;
+      }
+
+      setValidatingProblemId(problemId);
+      const currentProblem = problems.find((problem) => problem.id === problemId);
+      const currentValidated = !!currentProblem?.is_validated;
+      const currentCount = currentProblem?.validation_count ?? 0;
+      const optimisticValidated = !currentValidated;
+      const optimisticCount = Math.max(0, currentCount + (currentValidated ? -1 : 1));
+
+      updateProblemStats(problemId, {
+        validationCount: optimisticCount,
+        isValidated: optimisticValidated,
+      });
+
+      if (currentValidated) {
+        const { error } = await supabase
+          .from("problem_validations")
+          .delete()
+          .eq("problem_id", problemId)
+          .eq("user_id", userId);
+
+        if (error) {
+          updateProblemStats(problemId, {
+            validationCount: currentCount,
+            isValidated: currentValidated,
+          });
+          window.alert(error.message ?? "Unable to update validation.");
+          setValidatingProblemId(null);
+          return;
+        }
+      } else {
+        const { error } = await supabase
+          .from("problem_validations")
+          .insert({ problem_id: problemId, user_id: userId });
+
+        if (error) {
+          updateProblemStats(problemId, {
+            validationCount: currentCount,
+            isValidated: currentValidated,
+          });
+          window.alert(error.message ?? "Unable to update validation.");
+          setValidatingProblemId(null);
+          return;
+        }
+      }
+
+      const { data } = await supabase
+        .from("problem_validations")
+        .select("id")
+        .eq("problem_id", problemId)
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      updateProblemStats(problemId, {
+        validationCount: optimisticCount,
+        isValidated: !!data?.id,
+      });
+      setValidatingProblemId(null);
+    },
+    [openLoginModal, problems, updateProblemStats, userId, validatingProblemId]
+  );
 
   const validateForm = () => {
     const normalizedTitle = title.trim();
@@ -260,52 +408,44 @@ export default function ProblemsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      <div className="mx-auto w-full max-w-6xl px-6 py-8 md:px-10">
-        <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-xs uppercase tracking-[0.3em] text-cyan-400">Problem Space</p>
+    <DashboardLayout activeItem="problems">
+      <section className="space-y-6">
+        <header className="flex flex-wrap items-end justify-between gap-4">
+          <div className="space-y-2">
             <h1 className="text-2xl font-semibold">Open Problems</h1>
+            <p className="max-w-2xl text-sm text-slate-300">
+              Discover real-world problems people face. Validate them, discuss insights, and build solutions.
+            </p>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                if (!userId) {
-                  openLoginModal(() => {
-                    setIsSubmitModalOpen(true);
-                  });
-                  return;
-                }
-                setMessage(null);
-                setEditingProblemId(null);
-                setTitle("");
-                setDescription("");
-                setAffectedGroup("");
-                setFrequency("weekly");
-                setCurrentWorkaround("");
-                setSolutionType("software");
-                setIsRealConfirmation(false);
-                setExpectedOutcome("");
-                setAdditionalContext("");
-                setIsSubmitModalOpen(true);
-              }}
-              className="inline-flex items-center gap-2 rounded-full border border-cyan-500/40 bg-cyan-500/20 px-4 py-2 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-500/30"
-            >
-              Share Problem
-            </button>
-            <Link
-              href="/"
-              className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:border-cyan-400/60 hover:text-cyan-100"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back to Lab
-            </Link>
-          </div>
+          <button
+            type="button"
+            onClick={() => {
+              if (!userId) {
+                openLoginModal(() => {
+                  setIsSubmitModalOpen(true);
+                });
+                return;
+              }
+              setMessage(null);
+              setEditingProblemId(null);
+              setTitle("");
+              setDescription("");
+              setAffectedGroup("");
+              setFrequency("weekly");
+              setCurrentWorkaround("");
+              setSolutionType("software");
+              setIsRealConfirmation(false);
+              setExpectedOutcome("");
+              setAdditionalContext("");
+              setIsSubmitModalOpen(true);
+            }}
+            className="inline-flex min-h-11 items-center gap-2 rounded-full border border-cyan-500/40 bg-cyan-500/10 px-4 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-500/20"
+          >
+            Share Problem
+          </button>
         </header>
 
-        <section className="space-y-4">
-          <h2 className="text-lg font-semibold">Recent Problems</h2>
+        <section className="mx-auto max-w-[1040px] space-y-4">
           {loading ? (
             <div className="rounded-2xl border border-slate-800 bg-slate-900/50 px-4 py-6 text-sm text-slate-400">
               Loading problems...
@@ -315,7 +455,7 @@ export default function ProblemsPage() {
               No problems submitted yet.
             </div>
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid grid-cols-1 gap-6">
               {sortedProblems.map((problem) => {
                 return (
                   <ProblemCard
@@ -323,8 +463,12 @@ export default function ProblemsPage() {
                     problem={problem}
                     isOwner={problem.user_id === userId}
                     authorName={getAuthorDisplayName(problem.user_id)}
+                    validating={validatingProblemId === problem.id}
                     onOpen={() => setActiveProblem(problem)}
+                    onValidate={() => void handleValidate(problem.id)}
+                    onAddInsight={() => setActiveProblem(problem)}
                     onProposeSolution={() => openCreateExperiment(problem.id)}
+                    onEdit={() => openEditModal(problem)}
                     onDelete={() => requestDeleteProblem(problem)}
                   />
                 );
@@ -332,7 +476,7 @@ export default function ProblemsPage() {
             </div>
           )}
         </section>
-      </div>
+      </section>
 
       {isSubmitModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
@@ -477,11 +621,14 @@ export default function ProblemsPage() {
         problem={activeProblem}
         isOwner={!!(activeProblem && activeProblem.user_id === userId)}
         isAuthenticated={!!userId}
+        userId={userId}
         authorName={activeProblem ? getAuthorDisplayName(activeProblem.user_id) : "Member"}
         onClose={() => setActiveProblem(null)}
         onEdit={() => activeProblem && openEditModal(activeProblem)}
         onDelete={() => activeProblem && requestDeleteProblem(activeProblem)}
         onProposeSolution={() => activeProblem && openCreateExperiment(activeProblem.id)}
+        onRequireAuth={() => openLoginModal()}
+        onProblemStatsChange={updateProblemStats}
       />
 
       <CreatePost
@@ -522,6 +669,6 @@ export default function ProblemsPage() {
           </div>
         </div>
       )}
-    </div>
+    </DashboardLayout>
   );
 }

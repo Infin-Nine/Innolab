@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
-import { createClient, type User } from "@supabase/supabase-js";
+import { useEffect, useState } from "react";
+import type { User } from "@supabase/supabase-js";
 import { ImageUp, Loader2, X } from "lucide-react";
 import { useLoginModal } from "../contexts/LoginModalContext";
+import { supabase } from "../lib/supabaseClient";
 
 type Stage = "idea" | "exploring" | "prototype" | "testing" | "completed" | "failed";
 type WipStatus =
@@ -24,9 +25,21 @@ type Props = {
   linkedProblemTitle?: string | null;
 };
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+type PostInsertPayload = {
+  user_id: string;
+  title: string;
+  wip_status: WipStatus;
+  media_url: string | null;
+  problem_id?: string;
+  problem_statement?: string;
+  theory?: string;
+  explanation?: string;
+  approach?: string;
+  observations?: string;
+  reflection?: string;
+  feedback_needed?: string[] | string;
+  external_link?: string;
+};
 
 const stageStyles: Record<Stage, string> = {
   idea: "border-fuchsia-500/40 text-fuchsia-200",
@@ -52,6 +65,53 @@ const feedbackOptions = [
   "Identify flaws",
   "Open to collaborate",
 ];
+
+const omitProblemId = (payload: PostInsertPayload) => {
+  const next = { ...payload };
+  delete next.problem_id;
+  return next;
+};
+
+const toLegacyCompatiblePayload = (payload: PostInsertPayload): PostInsertPayload => {
+  const next: PostInsertPayload = {
+    user_id: payload.user_id,
+    title: payload.title,
+    wip_status: payload.wip_status,
+    media_url: payload.media_url,
+  };
+
+  if (payload.problem_statement) next.problem_statement = payload.problem_statement;
+  if (payload.explanation) next.explanation = payload.explanation;
+
+  return next;
+};
+
+const buildPublishAttempts = (
+  payload: PostInsertPayload,
+  fallbackStatus: WipStatus
+): PostInsertPayload[] => {
+  const attempts: PostInsertPayload[] = [payload];
+
+  if (payload.problem_id) {
+    attempts.push(omitProblemId(payload));
+  }
+
+  if (fallbackStatus !== payload.wip_status) {
+    const fallbackPayload = { ...payload, wip_status: fallbackStatus };
+    attempts.push(fallbackPayload);
+    if (fallbackPayload.problem_id) {
+      attempts.push(omitProblemId(fallbackPayload));
+    }
+  }
+
+  const legacyPayload = toLegacyCompatiblePayload(payload);
+  attempts.push(legacyPayload);
+  if (fallbackStatus !== payload.wip_status) {
+    attempts.push({ ...legacyPayload, wip_status: fallbackStatus });
+  }
+
+  return attempts;
+};
 
 export default function CreatePost({
   isOpen,
@@ -85,8 +145,7 @@ export default function CreatePost({
 
   if (!isOpen) return null;
 
-  const handleSubmit = async (event: FormEvent) => {
-    event.preventDefault();
+  const submitPost = async () => {
     setMessage(null);
     if (!user) {
       openLoginModal();
@@ -99,103 +158,87 @@ export default function CreatePost({
       setMessage("Title, Problem, and My Approach are required.");
       return;
     }
+
     setUploading(true);
-    const { data: profileRow, error: profileError } = await supabase
-      .from("profiles")
-      .select("username")
-      .eq("id", user.id)
-      .maybeSingle();
-    if (profileError) {
-      setMessage(profileError.message);
-      setUploading(false);
-      return;
-    }
-    const username = profileRow?.username?.trim() ?? "";
-    if (!username) {
-      setMessage("Set your username in profile before publishing.");
-      setUploading(false);
-      return;
-    }
-    await supabase.from("profiles").upsert({
-      id: user.id,
-      username,
-      avatar_url: user.user_metadata?.avatar_url ?? null,
-    });
-    let publicUrl: string | null = null;
-    if (file) {
-      const path = `${user.id}/${Date.now()}-${file.name}`;
-      const { error: uploadError } = await supabase.storage
-        .from("post-media")
-        .upload(path, file, { cacheControl: "3600", upsert: false });
-      if (uploadError) {
-        setMessage(uploadError.message);
-        setUploading(false);
-        return;
+
+    try {
+      let publicUrl: string | null = null;
+      if (file) {
+        const path = `${user.id}/${Date.now()}-${file.name}`;
+        const { error: uploadError } = await supabase.storage
+          .from("post-media")
+          .upload(path, file, { cacheControl: "3600", upsert: false });
+
+        if (uploadError) {
+          setMessage(uploadError.message);
+          return;
+        }
+
+        const { data } = supabase.storage.from("post-media").getPublicUrl(path);
+        publicUrl = data.publicUrl;
       }
-      const { data } = supabase.storage.from("post-media").getPublicUrl(path);
-      publicUrl = data.publicUrl;
-    }
-    const payload: {
-      user_id: string;
-      title: string;
-      wip_status: WipStatus;
-      media_url: string | null;
-      problem_id?: string;
-      problem_statement?: string;
-      theory?: string;
-      explanation?: string;
-      approach?: string;
-      observations?: string;
-      reflection?: string;
-      feedback_needed?: string[] | string;
-      external_link?: string;
-    } = {
-      user_id: user.id,
-      title: titleValue,
-      wip_status: stage,
-      media_url: publicUrl,
-    };
-    if (problem.trim()) payload.problem_statement = problem.trim();
-    if (approach.trim()) payload.explanation = approach.trim();
-    if (approach.trim()) payload.approach = approach.trim();
-    if (observations.trim()) payload.observations = observations.trim();
-    if (feedbackNeeded.length) payload.feedback_needed = feedbackNeeded;
-    if (externalLink.trim()) payload.external_link = externalLink.trim();
-    if (linkedProblemId?.trim()) payload.problem_id = linkedProblemId.trim();
-    const { error: insertError } = await supabase.from("posts").insert(payload);
-    if (insertError) {
-      const fallbackStatus = stageFallback[stage];
-      const fallback = await supabase.from("posts").insert({
+
+      const payload: PostInsertPayload = {
         user_id: user.id,
         title: titleValue,
-        wip_status: fallbackStatus,
+        problem_statement: problemValue,
+        explanation: approachValue,
+        approach: approachValue,
+        observations: observations.trim() || undefined,
+        feedback_needed: feedbackNeeded.length ? feedbackNeeded : undefined,
+        external_link: externalLink.trim() || undefined,
+        wip_status: stage,
         media_url: publicUrl,
-        ...(linkedProblemId?.trim() ? { problem_id: linkedProblemId.trim() } : {}),
-      });
-      if (fallback.error) {
-        setMessage(fallback.error.message);
-        setUploading(false);
+      };
+
+      if (linkedProblemId?.trim()) {
+        payload.problem_id = linkedProblemId.trim();
+      }
+
+      const fallbackStatus = stageFallback[stage];
+      const publishAttempts = buildPublishAttempts(payload, fallbackStatus);
+
+      let publishError: string | null = null;
+      let published = false;
+
+      for (const attempt of publishAttempts) {
+        const { error } = await supabase.from("posts").insert(attempt);
+        if (!error) {
+          published = true;
+          break;
+        }
+        publishError = error.message;
+      }
+
+      if (!published) {
+        setMessage(publishError ?? "Failed to publish solution.");
         return;
       }
+
+      setTitle("");
+      setProblem("");
+      setApproach("");
+      setObservations("");
+      setFeedbackNeeded([]);
+      setExternalLink("");
+      setStage("idea");
+      setFile(null);
+
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("experiment:created", {
+            detail: { userId: user.id },
+          })
+        );
+      }
+
+      onPostCreated?.();
+      onClose();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Failed to publish solution.");
+    } finally {
+      setUploading(false);
     }
-    setTitle("");
-    setProblem("");
-    setApproach("");
-    setObservations("");
-    setFeedbackNeeded([]);
-    setExternalLink("");
-    setStage("idea");
-    setFile(null);
-    setUploading(false);
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(
-        new CustomEvent("experiment:created", {
-          detail: { userId: user.id },
-        })
-      );
-    }
-    onPostCreated?.();
-    onClose();
   };
 
   return (
@@ -204,11 +247,11 @@ export default function CreatePost({
         <div className="flex items-center justify-between border-b border-slate-800 px-6 py-4">
           <div>
             <p className="text-xs uppercase tracking-[0.3em] text-cyan-400">
-              New Experiment
+              Build Solution
             </p>
-            <h3 className="text-lg font-semibold">Share Your Work</h3>
+            <h3 className="text-lg font-semibold">Share Your Solution</h3>
             <p className="text-sm text-slate-400">
-              Document what you&apos;re developing, testing, or improving.
+              Document your prototype, idea, or working solution.
             </p>
             {linkedProblemId && (
               <p className="mt-2 inline-flex rounded-full border border-amber-500/40 bg-amber-500/10 px-3 py-1 text-xs text-amber-100">
@@ -224,7 +267,14 @@ export default function CreatePost({
             <X className="h-4 w-4" />
           </button>
         </div>
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-6 py-5">
+        <form
+          noValidate
+          onSubmit={(event) => {
+            event.preventDefault();
+            void submitPost();
+          }}
+          className="flex-1 overflow-y-auto px-6 py-5"
+        >
           <div className="space-y-5">
             <section className="rounded-3xl border border-slate-800 bg-slate-950/60 p-4">
               <div className="space-y-4">
@@ -233,7 +283,6 @@ export default function CreatePost({
                   <input
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
-                    required
                     className="w-full rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
                     placeholder="Quantum Sensor Calibration"
                   />
@@ -271,7 +320,6 @@ export default function CreatePost({
                   <textarea
                     value={problem}
                     onChange={(e) => setProblem(e.target.value)}
-                    required
                     className="min-h-[120px] w-full rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
                     placeholder="What exact problem are you trying to solve?"
                   />
@@ -286,7 +334,6 @@ export default function CreatePost({
                   <textarea
                     value={approach}
                     onChange={(e) => setApproach(e.target.value)}
-                    required
                     className="min-h-[100px] w-full rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
                     placeholder="What are you trying, and why this approach?"
                   />
@@ -387,8 +434,9 @@ export default function CreatePost({
               Cancel
             </button>
             <button
-              type="submit"
-              disabled={uploading || !supabaseUrl || !supabaseAnonKey}
+              type="button"
+              onClick={() => void submitPost()}
+              disabled={uploading}
               className="flex items-center gap-2 rounded-full border border-cyan-500/40 bg-cyan-500/20 px-4 py-2 text-xs font-semibold text-cyan-100 transition hover:bg-cyan-500/30 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {uploading ? (
@@ -399,7 +447,7 @@ export default function CreatePost({
               ) : (
                 <>
                   <ImageUp className="h-4 w-4" />
-                  Publish Experiment
+                  Publish Solution
                 </>
               )}
             </button>

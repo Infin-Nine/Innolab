@@ -3,51 +3,32 @@
 import DesktopLayout from "./DesktopLayout";
 import MobileLayout from "./MobileLayout";
 
+type NavItem = "problems" | "solutions" | "profile" | "collaborations";
+
 type ResponsiveLayoutProps = {
-  activeTab: "feed" | "profile";
-  onTabChange: (tab: "feed" | "profile") => void;
+  activeItem: NavItem;
   hasSession: boolean;
   onOpenAuthConsole: () => void;
-  fabMenuOpen: boolean;
-  onFabOpen: () => void;
-  onFabClose: () => void;
-  desktopChildren: React.ReactNode;
-  mobileChildren: React.ReactNode;
+  children: React.ReactNode;
 };
 
 export default function ResponsiveLayout({
-  activeTab,
-  onTabChange,
+  activeItem,
   hasSession,
   onOpenAuthConsole,
-  fabMenuOpen,
-  onFabOpen,
-  onFabClose,
-  desktopChildren,
-  mobileChildren,
+  children,
 }: ResponsiveLayoutProps) {
   return (
     <>
       <div className="block md:hidden">
-        <MobileLayout
-          activeTab={activeTab}
-          onTabChange={onTabChange}
-          fabMenuOpen={fabMenuOpen}
-          onFabOpen={onFabOpen}
-          onFabClose={onFabClose}
-        >
-          {mobileChildren}
+        <MobileLayout activeItem={activeItem} hasSession={hasSession} onOpenAuthConsole={onOpenAuthConsole}>
+          {children}
         </MobileLayout>
       </div>
 
       <div className="hidden md:block">
-        <DesktopLayout
-          activeTab={activeTab}
-          onTabChange={onTabChange}
-          hasSession={hasSession}
-          onOpenAuthConsole={onOpenAuthConsole}
-        >
-          {desktopChildren}
+        <DesktopLayout activeItem={activeItem} hasSession={hasSession} onOpenAuthConsole={onOpenAuthConsole}>
+          {children}
         </DesktopLayout>
       </div>
     </>

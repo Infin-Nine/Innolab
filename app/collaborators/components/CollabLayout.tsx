@@ -24,12 +24,12 @@ export default function CollabLayout({ title, subtitle, children }: Props) {
             />
             <div>
               <p className="text-lg font-semibold">InoLabium</p>
-              <p className="text-xs text-slate-400">Open Research & Innovation Network</p>
+              <p className="text-xs text-slate-400">Solve real problems</p>
             </div>
           </div>
           <nav className="mt-8 space-y-2">
             <Link
-              href="/"
+              href="/problems"
               className="flex w-full items-center gap-3 rounded-xl border border-transparent bg-slate-900/40 px-4 py-3 text-left text-sm font-semibold text-slate-300 transition hover:border-slate-700 hover:text-slate-100"
             >
               Home

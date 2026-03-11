@@ -140,8 +140,8 @@ export default function UnifiedDocumentModal({
         <div className="px-4 py-4 md:px-6 md:py-6 border-b border-white/10 md:border-b-0">
           <div className="flex items-start justify-between gap-6">
             <div>
-              <p className="text-sm font-medium text-cyan-300">Experiment Log</p>
-              <p className="mt-2 text-xl md:text-2xl font-semibold text-white">{post.title ?? "Untitled Experiment"}</p>
+              <p className="text-sm font-medium text-cyan-300">Solution Log</p>
+              <p className="mt-2 text-xl md:text-2xl font-semibold text-white">{post.title ?? "Untitled Solution"}</p>
               <div className="mt-5 flex flex-wrap items-center gap-3 text-sm text-slate-400">
                 {post.wip_status && (
                   <span

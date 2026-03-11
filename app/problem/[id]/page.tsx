@@ -5,20 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ArrowLeft, Lightbulb } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient";
-
-type Problem = {
-  id: string;
-  user_id: string;
-  title: string;
-  description: string;
-  affected_group: string;
-  frequency: string;
-  current_workaround: string;
-  solution_type: string;
-  expected_outcome?: string | null;
-  additional_context?: string | null;
-  created_at?: string | null;
-};
+import ProblemDiscussionSection from "../../components/problems/ProblemDiscussionSection";
+import type { Problem } from "../../components/problems/types";
 
 export default function ProblemDetailPage() {
   const router = useRouter();
@@ -38,14 +26,47 @@ export default function ProblemDetailPage() {
         .eq("id", params?.id ?? "")
         .maybeSingle();
       if (!active) return;
-      setProblem((data as Problem | null) ?? null);
+      const baseProblem = (data as Problem | null) ?? null;
+      if (!baseProblem) {
+        setProblem(null);
+        setLoading(false);
+        return;
+      }
+
+      const [{ count: validationCount }, { count: commentCount }, { data: validationRow }] =
+        await Promise.all([
+          supabase
+            .from("problem_validations")
+            .select("*", { count: "exact", head: true })
+            .eq("problem_id", baseProblem.id),
+          supabase
+            .from("problem_comments")
+            .select("*", { count: "exact", head: true })
+            .eq("problem_id", baseProblem.id),
+          userId
+            ? supabase
+                .from("problem_validations")
+                .select("id")
+                .eq("problem_id", baseProblem.id)
+                .eq("user_id", userId)
+                .maybeSingle()
+            : Promise.resolve({ data: null as { id?: string } | null }),
+        ]);
+
+      if (!active) return;
+      setProblem({
+        ...baseProblem,
+        validation_count: validationCount ?? 0,
+        comment_count: commentCount ?? 0,
+        is_validated: !!validationRow?.id,
+      });
       setLoading(false);
     };
     void load();
     return () => {
       active = false;
     };
-  }, [params?.id]);
+  }, [params?.id, userId]);
 
   useEffect(() => {
     let mounted = true;
@@ -136,13 +157,34 @@ export default function ProblemDetailPage() {
                   router.push("/login");
                   return;
                 }
-                router.push(`/lab/new?problemId=${problem.id}&problemTitle=${encodeURIComponent(problem.title)}`);
+                router.push(`/solutions/new?problemId=${problem.id}&problemTitle=${encodeURIComponent(problem.title)}`);
               }}
               className="inline-flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/20"
             >
               <Lightbulb className="h-3.5 w-3.5" />
               Propose Solution
             </button>
+
+            <ProblemDiscussionSection
+              problemId={problem.id}
+              userId={userId}
+              initialValidationCount={problem.validation_count ?? 0}
+              initialCommentCount={problem.comment_count ?? 0}
+              initialIsValidated={!!problem.is_validated}
+              onRequireAuth={() => router.push("/login")}
+              onStatsChange={(stats) =>
+                setProblem((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        validation_count: stats.validationCount ?? prev.validation_count ?? 0,
+                        comment_count: stats.commentCount ?? prev.comment_count ?? 0,
+                        is_validated: stats.isValidated ?? prev.is_validated ?? false,
+                      }
+                    : prev
+                )
+              }
+            />
           </article>
         )}
       </div>

@@ -142,14 +142,13 @@ export default function ExperimentEditModal({
       feedback_needed: feedback.length ? feedback : null,
       external_link: externalLink.trim() || null,
     };
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from("posts")
       .update(payload)
       .eq("id", postId)
       .eq("user_id", uid)
       .select("id")
       .maybeSingle();
-    console.log("Experiment update result", { data, error });
     if (error) {
       setMessage(error.message);
       setSaving(false);

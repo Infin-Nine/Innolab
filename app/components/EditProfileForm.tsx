@@ -18,6 +18,8 @@ type EditProfileModalProps = {
   onClose?: () => void;
   onCancel?: () => void;
   onSave?: (values: EditProfileValues) => void;
+  saving?: boolean;
+  message?: string | null;
 };
 
 export default function EditProfileModal({
@@ -25,6 +27,8 @@ export default function EditProfileModal({
   onClose,
   onCancel,
   onSave,
+  saving = false,
+  message = null,
 }: EditProfileModalProps) {
   const initialTab: ActiveTab = initialValues?.profileType === "innovator" ? "builder" : "sharer";
   const [activeTab, setActiveTab] = useState<ActiveTab>(initialTab ?? "sharer");
@@ -43,7 +47,7 @@ export default function EditProfileModal({
   };
 
   return (
-    <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-gray-800 bg-[#111827] p-6 text-white shadow-2xl sm:p-8">
+    <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-gray-800 bg-[#111827] p-6 text-white shadow-2xl sm:p-8">
       <div className="flex items-start justify-between gap-3">
         <h2 className="text-xl font-semibold sm:text-2xl">Edit Your Profile</h2>
         <button
@@ -72,7 +76,7 @@ export default function EditProfileModal({
                 onClick={() => setActiveTab("sharer")}
                 className="sr-only"
               />
-              📢 Share Problems
+              Share Problems
             </label>
 
             <label
@@ -87,18 +91,18 @@ export default function EditProfileModal({
                 onClick={() => setActiveTab("builder")}
                 className="sr-only"
               />
-              🛠️ Build Solutions
+              Build Solutions
             </label>
           </div>
         </div>
 
         <div className="rounded-xl border border-gray-800 bg-[#0b1121] px-3 py-2">
           {activeTab === "sharer" ? (
-            <span className="bg-blue-900/50 text-blue-400 text-xs px-2 py-1 rounded-full border border-blue-800">
+            <span className="rounded-full border border-blue-800 bg-blue-900/50 px-2 py-1 text-xs text-blue-400">
               Problem Sharer
             </span>
           ) : (
-            <span className="bg-emerald-900/50 text-emerald-400 text-xs px-2 py-1 rounded-full border border-emerald-800">
+            <span className="rounded-full border border-emerald-800 bg-emerald-900/50 px-2 py-1 text-xs text-emerald-400">
               Builder
             </span>
           )}
@@ -113,9 +117,7 @@ export default function EditProfileModal({
               id="display-name"
               value={displayName}
               onChange={(event) => setDisplayName(event.target.value)}
-              placeholder={
-                activeTab === "builder" ? "e.g., Rishabh Rajput" : "e.g., Rahul Sahu"
-              }
+              placeholder={activeTab === "builder" ? "e.g., Rishabh Rajput" : "e.g., Rahul Sahu"}
               className="w-full rounded-xl border border-gray-800 bg-[#0a1020] px-4 py-3 text-sm text-white placeholder:text-gray-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
             />
           </div>
@@ -164,19 +166,22 @@ export default function EditProfileModal({
           )}
         </div>
 
-        <div className="sticky bottom-0 z-10 -mx-6 flex flex-col-reverse gap-3 border-t border-gray-800 bg-[#111827]/95 px-6 pt-4 pb-1 backdrop-blur sm:-mx-8 sm:flex-row sm:justify-end sm:px-8">
+        <div className="sticky bottom-0 z-10 -mx-6 flex flex-col-reverse gap-3 border-t border-gray-800 bg-[#111827]/95 px-6 pb-1 pt-4 backdrop-blur sm:-mx-8 sm:flex-row sm:justify-end sm:px-8">
+          {message ? <p className="text-sm text-rose-300 sm:mr-auto">{message}</p> : null}
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-full border border-gray-700 bg-transparent px-5 py-2.5 text-sm font-semibold text-gray-400 transition hover:border-gray-500 hover:text-white"
+            disabled={saving}
+            className="rounded-full border border-gray-700 bg-transparent px-5 py-2.5 text-sm font-semibold text-gray-400 transition hover:border-gray-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
           >
             Cancel
           </button>
           <button
             type="submit"
-            className="inline-flex items-center justify-center rounded-full border border-emerald-500 bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-[#0b1121] transition hover:bg-emerald-400"
+            disabled={saving}
+            className="inline-flex items-center justify-center rounded-full border border-emerald-500 bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-[#0b1121] transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Save Profile
+            {saving ? "Saving..." : "Save Profile"}
           </button>
         </div>
       </form>

@@ -10,7 +10,6 @@ import { supabase } from "../../lib/supabaseClient";
 type Profile = {
   id: string;
   username?: string | null;
-  full_name?: string | null;
   email?: string | null;
   avatar_url?: string | null;
   bio?: string | null;
@@ -71,23 +70,30 @@ export default function CollabDiscoverAllPage() {
 
   useEffect(() => {
     let active = true;
+
     const fetchProfiles = async () => {
       setLoading(true);
       let request = supabase.from("profiles").select("*");
       if (userId) {
         request = request.neq("id", userId);
       }
+
       const { data, error } = await request;
-      console.log("[discover-all] error", error?.message ?? null);
       if (!active) return;
+
+      if (error) {
+        setProfiles([]);
+        setLoading(false);
+        return;
+      }
+
       let list = (data as Profile[] | null) ?? [];
       if (normalizedQuery) {
-        list = list.filter((p) => {
-          const name = [p.username ?? "", p.email ?? ""]
-            .join(" ")
-            .toLowerCase();
-          const skills = formatSkills(p).join(" ").toLowerCase();
-          const bio = (p.bio ?? "").toLowerCase();
+        list = list.filter((profile) => {
+          const name = [profile.username ?? "", profile.email ?? ""].join(" ").toLowerCase();
+          const skills = formatSkills(profile).join(" ").toLowerCase();
+          const bio = (profile.bio ?? "").toLowerCase();
+
           return (
             name.includes(normalizedLower) ||
             skills.includes(normalizedLower) ||
@@ -95,14 +101,16 @@ export default function CollabDiscoverAllPage() {
           );
         });
       }
+
       setProfiles(list);
       setLoading(false);
     };
-    fetchProfiles();
+
+    void fetchProfiles();
     return () => {
       active = false;
     };
-  }, [userId, normalizedQuery, normalizedLower]);
+  }, [userId, normalizedLower, normalizedQuery]);
 
   return (
     <CollabLayout
@@ -126,6 +134,7 @@ export default function CollabDiscoverAllPage() {
           )}
         </div>
       </div>
+
       {loading ? (
         <div className="flex items-center gap-2 text-sm text-slate-400">
           <Loader2 className="h-4 w-4 animate-spin" />
@@ -157,12 +166,10 @@ export default function CollabDiscoverAllPage() {
                   </div>
                 )}
                 <div>
-                  <p className="text-sm font-semibold text-slate-100">
-                    {getDisplayName(profile)}
-                  </p>
+                  <p className="text-sm font-semibold text-slate-100">{getDisplayName(profile)}</p>
                   <p className="text-xs text-slate-400">
                     {(profile.bio ?? "").slice(0, 80)}
-                    {(profile.bio ?? "").length > 80 ? "…" : ""}
+                    {(profile.bio ?? "").length > 80 ? "..." : ""}
                   </p>
                 </div>
               </div>

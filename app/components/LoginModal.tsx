@@ -47,7 +47,7 @@ export default function LoginModal() {
       return;
     }
 
-    const { data, error } = await supabase.auth.signUp({
+    const { error } = await supabase.auth.signUp({
       email: authEmail,
       password: authPassword,
     });
@@ -55,13 +55,6 @@ export default function LoginModal() {
       setAuthMessage(error.message);
       setAuthLoading(false);
       return;
-    }
-    const displayName = authName || authEmail.split("@")[0] || "Innovator";
-    if (data.user) {
-      await supabase.from("profiles").upsert({
-        id: data.user.id,
-        username: displayName,
-      });
     }
     setAuthMessage("Account created. You can now log in.");
     setMode("login");

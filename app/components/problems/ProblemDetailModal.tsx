@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Lightbulb, X } from "lucide-react";
 import type { Problem } from "./types";
+import ProblemDiscussionSection from "./ProblemDiscussionSection";
 
 const frequencyBadge: Record<string, string> = {
   daily: "border-rose-400/60 bg-rose-500/20 text-rose-100",
@@ -16,22 +17,31 @@ type Props = {
   problem: Problem | null;
   isOwner: boolean;
   isAuthenticated: boolean;
+  userId: string | null;
   authorName: string;
   onClose: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onProposeSolution: () => void;
+  onRequireAuth: () => void;
+  onProblemStatsChange?: (
+    problemId: string,
+    stats: { validationCount?: number; commentCount?: number; isValidated?: boolean }
+  ) => void;
 };
 
 export default function ProblemDetailModal({
   problem,
   isOwner,
   isAuthenticated,
+  userId,
   authorName,
   onClose,
   onEdit,
   onDelete,
   onProposeSolution,
+  onRequireAuth,
+  onProblemStatsChange,
 }: Props) {
   if (!problem) {
     return null;
@@ -146,6 +156,16 @@ export default function ProblemDetailModal({
             <Lightbulb className="h-3.5 w-3.5" />
             Propose Solution
           </button>
+
+          <ProblemDiscussionSection
+            problemId={problem.id}
+            userId={userId}
+            initialValidationCount={problem.validation_count ?? 0}
+            initialCommentCount={problem.comment_count ?? 0}
+            initialIsValidated={!!problem.is_validated}
+            onRequireAuth={onRequireAuth}
+            onStatsChange={(stats) => onProblemStatsChange?.(problem.id, stats)}
+          />
         </div>
       </div>
     </div>

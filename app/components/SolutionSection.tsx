@@ -15,7 +15,6 @@ type Solution = {
 type Profile = {
   id: string;
   username?: string | null;
-  full_name?: string | null;
   email?: string | null;
 };
 
@@ -81,18 +80,6 @@ export default function SolutionSection({ postId }: Props) {
     const text = draft.trim();
     if (!text) return;
     setSubmitting(true);
-    const username =
-      user.user_metadata?.username ||
-      user.user_metadata?.full_name ||
-      user.email?.split("@")[0] ||
-      "Innovator";
-    await supabase.from("profiles").upsert({
-      id: user.id,
-      username,
-      full_name: user.user_metadata?.full_name ?? null,
-      email: user.email ?? null,
-      avatar_url: user.user_metadata?.avatar_url ?? null,
-    });
     const { error, data } = await supabase
       .from("solutions")
       .insert({ post_id: postId, user_id: user.id, content: text })
@@ -106,12 +93,15 @@ export default function SolutionSection({ postId }: Props) {
     const row = data as Solution;
     setSolutions((prev) => [row, ...prev]);
     if (user) {
+      const username =
+        user.user_metadata?.username ||
+        user.email?.split("@")[0] ||
+        "Innovator";
       setAuthors((prev) => ({
         ...prev,
         [user.id]: {
           id: user.id,
-          username: user.user_metadata?.username ?? null,
-          full_name: user.user_metadata?.full_name ?? null,
+          username,
           email: user.email ?? null,
         },
       }));
@@ -144,7 +134,7 @@ export default function SolutionSection({ postId }: Props) {
   };
 
   const displayName = (p?: Profile) =>
-    p?.username || p?.full_name || p?.email || "Innovator";
+    p?.username || p?.email || "Innovator";
 
   return (
     <div className="mt-4 space-y-3">

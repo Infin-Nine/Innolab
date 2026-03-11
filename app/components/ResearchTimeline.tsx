@@ -27,7 +27,7 @@ type WipStatus =
   | "completed";
 type Frequency = "daily" | "weekly" | "monthly" | "occasionally" | "rare";
 type SolutionType = "software" | "hardware" | "service" | "policy" | "research" | "education";
-type TimelineType = "experiments" | "problems";
+type TimelineType = "solutions" | "problems";
 
 type Post = {
   id: string;
@@ -139,7 +139,7 @@ function ProblemCard({
   };
   return (
     <div
-      className={`items-start gap-4 rounded-2xl border border-slate-800 bg-slate-950/70 ${compact ? "flex flex-col p-4" : "grid grid-cols-[120px_1fr] p-4"}`}
+      className={`items-start gap-4 rounded-2xl border border-slate-800 bg-slate-950/70 ${compact ? "flex flex-col p-4" : "grid grid-cols-1 gap-3 p-4 sm:grid-cols-[120px_1fr]"}`}
       role="button"
       tabIndex={0}
       onClick={onOpen}
@@ -177,12 +177,33 @@ function ProblemCard({
               </div>
             ) : (
               <>
-                <button type="button" onClick={onEdit} className="rounded-full border border-cyan-500/40 bg-cyan-500/10 px-3 py-1 text-xs font-semibold text-cyan-100 transition hover:bg-cyan-500/20">
-                  Edit
-                </button>
-                <button type="button" onClick={onDelete} className="rounded-full border border-rose-500/40 bg-rose-500/10 px-3 py-1 text-xs font-semibold text-rose-100 transition hover:bg-rose-500/20">
-                  Delete
-                </button>
+                <div className="relative ml-auto sm:hidden" data-owner-menu>
+                  <button
+                    type="button"
+                    onClick={onToggleActionMenu}
+                    className="inline-flex min-h-11 items-center justify-center rounded-full border border-slate-700 px-3 text-slate-200 transition hover:border-cyan-400/60 hover:text-cyan-100"
+                  >
+                    <MoreHorizontal className="h-4 w-4" />
+                  </button>
+                  {actionMenuOpen && (
+                    <div className="absolute right-0 top-full z-[70] mt-2 w-36 rounded-2xl border border-slate-700 bg-slate-950 p-1 shadow-xl">
+                      <button type="button" onClick={onEdit} className="flex min-h-11 w-full items-center rounded-xl px-3 text-left text-xs font-semibold text-slate-100 transition hover:bg-slate-800">
+                        Edit
+                      </button>
+                      <button type="button" onClick={onDelete} className="flex min-h-11 w-full items-center rounded-xl px-3 text-left text-xs font-semibold text-rose-200 transition hover:bg-rose-500/10">
+                        Delete
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <div className="hidden items-center gap-2 sm:flex">
+                  <button type="button" onClick={onEdit} className="rounded-full border border-cyan-500/40 bg-cyan-500/10 px-3 py-1 text-xs font-semibold text-cyan-100 transition hover:bg-cyan-500/20">
+                    Edit
+                  </button>
+                  <button type="button" onClick={onDelete} className="rounded-full border border-rose-500/40 bg-rose-500/10 px-3 py-1 text-xs font-semibold text-rose-100 transition hover:bg-rose-500/20">
+                    Delete
+                  </button>
+                </div>
               </>
             ))}
         </div>
@@ -298,7 +319,7 @@ export default function ResearchTimeline({
   onCountChange,
   compact = false,
 }: Props) {
-  const [timelineType, setTimelineType] = useState<TimelineType>("experiments");
+  const [timelineType, setTimelineType] = useState<TimelineType>("solutions");
   const [posts, setPosts] = useState<Post[]>(initialPosts ?? []);
   const [problems, setProblems] = useState<Problem[]>([]);
   const [loading, setLoading] = useState(!initialPosts);
@@ -332,7 +353,7 @@ export default function ResearchTimeline({
 
   useEffect(() => {
     let mounted = true;
-    const fetchExperiments = async () => {
+    const fetchSolutions = async () => {
       if (initialPosts) {
         if (!mounted) return;
         setPosts(initialPosts);
@@ -365,7 +386,7 @@ export default function ResearchTimeline({
       onCountChange?.(next.length);
       setLoading(false);
     };
-    if (timelineType === "experiments") void fetchExperiments();
+    if (timelineType === "solutions") void fetchSolutions();
     else void fetchProblems();
     return () => {
       mounted = false;
@@ -516,7 +537,7 @@ export default function ResearchTimeline({
       return;
     }
     setDeletingItem(true);
-    if (deleteTarget.type === "experiments") {
+    if (deleteTarget.type === "solutions") {
       const { error } = await supabase.from("posts").delete().eq("id", deleteTarget.id).eq("user_id", currentUserId);
       if (error) return void setDeletingItem(false);
       setPosts((prev) => {
@@ -539,7 +560,7 @@ export default function ResearchTimeline({
     setDeletingItem(false);
   };
 
-  const openCreateExperiment = (problem: Problem) => {
+  const openCreateSolution = (problem: Problem) => {
     const openModal = () => {
       setSelectedProblemId(problem.id);
       setSelectedProblemTitle(problem.title);
@@ -554,28 +575,28 @@ export default function ResearchTimeline({
     <>
       <div className="space-y-4">
         <div className="flex w-fit items-center gap-2 rounded-2xl border border-slate-800 bg-slate-950/60 p-1">
-          <button type="button" onClick={() => setTimelineType("experiments")} className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition ${timelineType === "experiments" ? "border border-cyan-500/40 bg-cyan-500/20 text-cyan-100" : "border border-transparent text-slate-300 hover:text-slate-100"}`}>Experiments</button>
+          <button type="button" onClick={() => setTimelineType("solutions")} className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition ${timelineType === "solutions" ? "border border-cyan-500/40 bg-cyan-500/20 text-cyan-100" : "border border-transparent text-slate-300 hover:text-slate-100"}`}>Solutions</button>
           <button type="button" onClick={() => setTimelineType("problems")} className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition ${timelineType === "problems" ? "border border-amber-500/40 bg-amber-500/20 text-amber-100" : "border border-transparent text-slate-300 hover:text-slate-100"}`}>Problems</button>
         </div>
 
         {loading ? (
           <div className="flex items-center gap-2 text-sm text-slate-400">
             <span className="h-4 w-4 animate-spin rounded-full border-2 border-cyan-400/50 border-t-transparent" />
-            {timelineType === "experiments" ? "Loading experiments..." : "Loading problems..."}
+            {timelineType === "solutions" ? "Loading solutions..." : "Loading problems..."}
           </div>
-        ) : timelineType === "experiments" ? (
+        ) : timelineType === "solutions" ? (
           posts.length === 0 ? (
-            <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-800 bg-slate-950/70 p-8 text-center"><p className="text-base font-semibold text-slate-100">No experiments yet.</p></div>
+            <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-800 bg-slate-950/70 p-8 text-center"><p className="text-base font-semibold text-slate-100">No solutions yet.</p></div>
           ) : (
             posts.map((post) => {
               const dateText = post.created_at ? new Date(post.created_at).toLocaleDateString() : "Recently";
               const desc = excerpt(post.problem_statement ?? "", 140);
-              const actionKey = `experiments:${post.id}`;
+              const actionKey = `solutions:${post.id}`;
               return (
-                <div key={post.id} className={`items-start gap-4 rounded-2xl border border-slate-800 bg-slate-950/70 ${compact ? "flex flex-col p-4" : "grid grid-cols-[120px_1fr] p-4"}`} role="button" tabIndex={0} onClick={() => setActivePostId(post.id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") setActivePostId(post.id); }} style={{ cursor: "pointer" }}>
+                <div key={post.id} className={`items-start gap-4 rounded-2xl border border-slate-800 bg-slate-950/70 ${compact ? "flex flex-col p-4" : "grid grid-cols-1 gap-3 p-4 sm:grid-cols-[120px_1fr]"}`} role="button" tabIndex={0} onClick={() => setActivePostId(post.id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") setActivePostId(post.id); }} style={{ cursor: "pointer" }}>
                   <div className="text-xs text-slate-400">{dateText}</div>
                   <div className="w-full text-sm text-slate-200">
-                    <p className="font-semibold text-slate-100">{post.title ?? "Untitled Experiment"}</p>
+                    <p className="font-semibold text-slate-100">{post.title ?? "Untitled Solution"}</p>
                     {post.problem_statement && <p className="mt-1 whitespace-pre-wrap text-slate-300 [word-break:break-word]">{desc}</p>}
                     <div className="mt-2 flex flex-wrap items-center gap-2" onClick={(event) => event.stopPropagation()}>
                       <span className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide ${badgeStyles.prototype}`}>PROTOTYPE</span>
@@ -587,14 +608,25 @@ export default function ResearchTimeline({
                             {actionMenuKey === actionKey && (
                               <div className="absolute right-0 bottom-full z-[70] mb-2 w-36 rounded-2xl border border-slate-700 bg-slate-950 p-1 shadow-xl">
                                 <button type="button" onClick={() => openEdit(post.id)} className="flex min-h-11 w-full items-center rounded-xl px-3 text-left text-xs font-semibold text-slate-100 transition hover:bg-slate-800">Edit</button>
-                                <button type="button" onClick={() => requestDelete(post.id, "experiments")} className="flex min-h-11 w-full items-center rounded-xl px-3 text-left text-xs font-semibold text-rose-200 transition hover:bg-rose-500/10">Delete</button>
+                                <button type="button" onClick={() => requestDelete(post.id, "solutions")} className="flex min-h-11 w-full items-center rounded-xl px-3 text-left text-xs font-semibold text-rose-200 transition hover:bg-rose-500/10">Delete</button>
                               </div>
                             )}
                           </div>
                         ) : (
                           <>
-                            <button type="button" onClick={() => openEdit(post.id)} className="rounded-full border border-cyan-500/40 bg-cyan-500/10 px-3 py-1 text-xs font-semibold text-cyan-100 transition hover:bg-cyan-500/20">Edit</button>
-                            <button type="button" onClick={() => requestDelete(post.id, "experiments")} className="rounded-full border border-rose-500/40 bg-rose-500/10 px-3 py-1 text-xs font-semibold text-rose-100 transition hover:bg-rose-500/20">Delete</button>
+                            <div className="relative ml-auto sm:hidden" data-owner-menu>
+                              <button type="button" onClick={() => setActionMenuKey((prev) => (prev === actionKey ? null : actionKey))} className="inline-flex min-h-11 items-center justify-center rounded-full border border-slate-700 px-3 text-slate-200 transition hover:border-cyan-400/60 hover:text-cyan-100"><MoreHorizontal className="h-4 w-4" /></button>
+                              {actionMenuKey === actionKey && (
+                                <div className="absolute right-0 top-full z-[70] mt-2 w-36 rounded-2xl border border-slate-700 bg-slate-950 p-1 shadow-xl">
+                                  <button type="button" onClick={() => { setActionMenuKey(null); openEdit(post.id); }} className="flex min-h-11 w-full items-center rounded-xl px-3 text-left text-xs font-semibold text-slate-100 transition hover:bg-slate-800">Edit</button>
+                                  <button type="button" onClick={() => { setActionMenuKey(null); requestDelete(post.id, "solutions"); }} className="flex min-h-11 w-full items-center rounded-xl px-3 text-left text-xs font-semibold text-rose-200 transition hover:bg-rose-500/10">Delete</button>
+                                </div>
+                              )}
+                            </div>
+                            <div className="hidden items-center gap-2 sm:flex">
+                              <button type="button" onClick={() => openEdit(post.id)} className="rounded-full border border-cyan-500/40 bg-cyan-500/10 px-3 py-1 text-xs font-semibold text-cyan-100 transition hover:bg-cyan-500/20">Edit</button>
+                              <button type="button" onClick={() => requestDelete(post.id, "solutions")} className="rounded-full border border-rose-500/40 bg-rose-500/10 px-3 py-1 text-xs font-semibold text-rose-100 transition hover:bg-rose-500/20">Delete</button>
+                            </div>
                           </>
                         ))}
                     </div>
@@ -626,8 +658,8 @@ export default function ResearchTimeline({
       </div>
 
       <UnifiedDocumentModal
-        open={timelineType === "experiments" && !!activePost}
-        post={timelineType === "experiments" ? activePost : null}
+        open={timelineType === "solutions" && !!activePost}
+        post={timelineType === "solutions" ? activePost : null}
         statusClassName={activePost ? badgeStyles[(activePost.wip_status ?? "idea") as WipStatus] : undefined}
         authorName={showAuthor ? authorName : null}
         onValidate={activePost ? handleToggleValidate : undefined}
@@ -646,7 +678,7 @@ export default function ResearchTimeline({
         onClose={() => setActiveProblemId(null)}
         onEdit={() => activeProblem && openEditProblem(activeProblem)}
         onDelete={() => activeProblem && requestDelete(activeProblem.id, "problems")}
-        onProposeSolution={() => activeProblem && openCreateExperiment(activeProblem)}
+        onProposeSolution={() => activeProblem && openCreateSolution(activeProblem)}
       />
 
       <FullProblemEditModal
@@ -669,7 +701,7 @@ export default function ResearchTimeline({
       {deleteTarget && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 p-4">
           <div className="w-full max-w-md rounded-3xl border border-slate-800 bg-slate-950 p-6">
-            <h3 className="text-lg font-semibold text-slate-100">{deleteTarget.type === "experiments" ? "Delete this experiment?" : "Delete this problem?"}</h3>
+            <h3 className="text-lg font-semibold text-slate-100">{deleteTarget.type === "solutions" ? "Delete this solution?" : "Delete this problem?"}</h3>
             <p className="mt-3 text-sm text-slate-300">This action cannot be undone.</p>
             <div className="mt-6 flex items-center justify-end gap-3">
               <button type="button" onClick={() => !deletingItem && setDeleteTarget(null)} disabled={deletingItem} className="rounded-full border border-slate-700 px-4 py-2 text-xs font-semibold text-slate-300 transition hover:border-slate-500 hover:text-slate-100 disabled:cursor-not-allowed disabled:opacity-60">Cancel</button>

@@ -11,7 +11,6 @@ import { supabase } from "../../lib/supabaseClient";
 type Profile = {
   id: string;
   username?: string | null;
-  full_name?: string | null;
   email?: string | null;
   avatar_url?: string | null;
   bio?: string | null;
@@ -49,43 +48,70 @@ export default function CollabRequestsPage() {
   }, []);
 
   useEffect(() => {
+    let active = true;
+
     const fetchRequests = async () => {
       if (!userId) {
         setIncoming([]);
         setOutgoing([]);
         return;
       }
+
       setLoading(true);
-      const { data: incomingRows, error: inErr } = await supabase
+
+      const { data: incomingRows, error: incomingError } = await supabase
         .from("collaborators")
         .select("id, requester_id, receiver_id, status")
         .eq("receiver_id", userId)
         .eq("status", "pending")
         .order("created_at", { ascending: false });
-      const { data: outgoingRows, error: outErr } = await supabase
+
+      const { data: outgoingRows, error: outgoingError } = await supabase
         .from("collaborators")
         .select("id, requester_id, receiver_id, status")
         .eq("requester_id", userId)
         .eq("status", "pending")
         .order("created_at", { ascending: false });
-      console.log("[requests] incoming err", inErr?.message ?? null);
-      console.log("[requests] outgoing err", outErr?.message ?? null);
+
+      if (!active) return;
+
+      if (incomingError || outgoingError) {
+        setIncoming([]);
+        setOutgoing([]);
+        setLoading(false);
+        return;
+      }
+
       const incomingList = (incomingRows as CollabRow[] | null) ?? [];
       const outgoingList = (outgoingRows as CollabRow[] | null) ?? [];
-      const incomingIds = incomingList.map((row) => row.requester_id);
-      const outgoingIds = outgoingList.map((row) => row.receiver_id);
-      const ids = Array.from(new Set([...incomingIds, ...outgoingIds]));
+      const ids = Array.from(
+        new Set([
+          ...incomingList.map((row) => row.requester_id),
+          ...outgoingList.map((row) => row.receiver_id),
+        ])
+      );
+
       const profileMap: Record<string, Profile> = {};
       if (ids.length) {
-        const { data: profileRows, error: profErr } = await supabase
+        const { data: profileRows, error: profileError } = await supabase
           .from("profiles")
           .select("id, username, email, avatar_url, bio")
           .in("id", ids);
-        console.log("[requests] profiles err", profErr?.message ?? null);
+
+        if (!active) return;
+
+        if (profileError) {
+          setIncoming([]);
+          setOutgoing([]);
+          setLoading(false);
+          return;
+        }
+
         (profileRows as Profile[] | null)?.forEach((profile) => {
           profileMap[profile.id] = profile;
         });
       }
+
       setIncoming(
         incomingList.map((row) => ({
           ...row,
@@ -100,7 +126,11 @@ export default function CollabRequestsPage() {
       );
       setLoading(false);
     };
-    fetchRequests();
+
+    void fetchRequests();
+    return () => {
+      active = false;
+    };
   }, [userId]);
 
   return (
@@ -121,9 +151,7 @@ export default function CollabRequestsPage() {
         <div className="space-y-10">
           <section className="space-y-4">
             <div>
-              <p className="text-xs uppercase tracking-[0.3em] text-fuchsia-400">
-                Incoming
-              </p>
+              <p className="text-xs uppercase tracking-[0.3em] text-fuchsia-400">Incoming</p>
               <h2 className="text-lg font-semibold">Pending requests</h2>
             </div>
             {incoming.length === 0 ? (
@@ -155,16 +183,11 @@ export default function CollabRequestsPage() {
                         <p className="text-sm font-semibold text-slate-100">
                           {getDisplayName(row.profile)}
                         </p>
-                        <p className="text-xs text-slate-400">
-                          wants to collaborate with you.
-                        </p>
+                        <p className="text-xs text-slate-400">wants to collaborate with you.</p>
                       </div>
                     </div>
                     <div className="mt-4 flex flex-wrap items-center gap-3">
-                      <CollabButton
-                        targetProfileId={row.requester_id}
-                        currentUserId={userId}
-                      />
+                      <CollabButton targetProfileId={row.requester_id} currentUserId={userId} />
                       <Link
                         href={`/profile/${row.requester_id}`}
                         className="inline-flex flex-1 items-center justify-center rounded-full border border-cyan-500/40 bg-cyan-500/10 px-4 py-2 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-500/20"
@@ -177,11 +200,10 @@ export default function CollabRequestsPage() {
               </div>
             )}
           </section>
+
           <section className="space-y-4">
             <div>
-              <p className="text-xs uppercase tracking-[0.3em] text-emerald-400">
-                Outgoing
-              </p>
+              <p className="text-xs uppercase tracking-[0.3em] text-emerald-400">Outgoing</p>
               <h2 className="text-lg font-semibold">Requests you sent</h2>
             </div>
             {outgoing.length === 0 ? (
@@ -213,16 +235,11 @@ export default function CollabRequestsPage() {
                         <p className="text-sm font-semibold text-slate-100">
                           {getDisplayName(row.profile)}
                         </p>
-                        <p className="text-xs text-slate-400">
-                          awaiting their response.
-                        </p>
+                        <p className="text-xs text-slate-400">awaiting their response.</p>
                       </div>
                     </div>
                     <div className="mt-4 flex flex-wrap items-center gap-3">
-                      <CollabButton
-                        targetProfileId={row.receiver_id}
-                        currentUserId={userId}
-                      />
+                      <CollabButton targetProfileId={row.receiver_id} currentUserId={userId} />
                       <Link
                         href={`/profile/${row.receiver_id}`}
                         className="inline-flex flex-1 items-center justify-center rounded-full border border-cyan-500/40 bg-cyan-500/10 px-4 py-2 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-500/20"

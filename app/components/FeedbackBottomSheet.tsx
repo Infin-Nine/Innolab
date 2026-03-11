@@ -64,22 +64,6 @@ export default function FeedbackBottomSheet() {
       return;
     }
     setLoading(true);
-    const { data: userData } = await supabase.auth.getUser();
-    const u = userData?.user ?? null;
-    if (u) {
-      const username =
-        (u.user_metadata?.username as string | undefined) ||
-        (u.user_metadata?.full_name as string | undefined) ||
-        (u.email ? u.email.split("@")[0] : undefined) ||
-        "Innovator";
-      await supabase.from("profiles").upsert({
-        id: u.id,
-        username,
-        full_name: (u.user_metadata?.full_name as string | null) ?? null,
-        email: u.email ?? null,
-        avatar_url: (u.user_metadata?.avatar_url as string | null) ?? null,
-      });
-    }
     const content = composeContent(type, text.trim());
     const { data, error } = await supabase
       .from("solutions")
