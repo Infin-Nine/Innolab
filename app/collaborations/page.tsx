@@ -1,5 +1,5 @@
 import Link from "next/link";
-import CollabLayout from "./components/CollabLayout";
+import CollabLayout from "../collaborators/components/CollabLayout";
 
 export default function CollaboratorsHome() {
   return (
